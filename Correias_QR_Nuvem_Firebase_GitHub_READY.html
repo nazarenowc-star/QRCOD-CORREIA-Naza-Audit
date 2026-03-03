@@ -1,0 +1,3382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <title>Gestão de Correias Transportadoras – QR Code & Dashboard</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- XLSX (Exportar Excel / Macro) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- QRCode.js (geração de QR Code) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <!-- html5-qrcode (leitura de QR Code pela câmera) -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <!-- html2canvas e jsPDF para relatório PDF -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        body {
+            background-color: #f4f6f8;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.25rem;
+        }
+        .card {
+            margin-bottom: 1rem;
+        }
+        .tab-pane {
+            padding-top: 1rem;
+        }
+        .small-text {
+            font-size: 0.85rem;
+        }
+        .chart-container {
+            position: relative;
+            min-height: 260px;
+        }
+        .foto-preview {
+            max-width: 140px;
+            max-height: 100px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        #indicadorSalvando {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            z-index: 9999;
+            display: none;
+        }
+        .qr-box {
+            min-height: 210px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #reader {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .camera-warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 10px;
+            font-size: 0.8rem;
+        }
+        .critical-badge { background-color: #dc3545; color: white; }
+        .attention-badge { background-color: #fd7e14; color: white; }
+        .observation-badge { background-color: #ffc107; color: #212529; }
+        .safe-badge { background-color: #198754; color: white; }
+        .capacity-badge { background-color: #0d6efd; color: white; }
+        .table-responsive {
+            max-height: 60vh;
+        }
+        .badge-system {
+            font-size: 0.75rem;
+        }
+        .bg-purple {
+            background-color: #6f42c1 !important;
+        }
+        /* Área do relatório PDF */
+        #relatorioPreview {
+            background: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 16px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        #relatorioPreview h5 {
+            margin-bottom: 0.5rem;
+        }
+        #relatorioPreview .section-title {
+            font-weight: 600;
+            margin-top: 0.75rem;
+            margin-bottom: 0.25rem;
+        }
+        #relatorioPreview .linha {
+            border-bottom: 1px solid #e9ecef;
+            margin: 0.25rem 0;
+            padding-bottom: 0.25rem;
+        }
+        #relatorioFotos {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        #relatorioFotos img {
+            max-width: 120px;
+            max-height: 90px;
+            border-radius: 4px;
+            border: 1px solid #ced4da;
+        }
+        .problema-container {
+            transition: all 0.3s ease;
+        }
+        .select-small {
+            font-size: 0.85rem;
+            padding: 0.25rem 0.5rem;
+        }
+        .obs-textarea {
+            font-size: 0.85rem;
+            min-height: 60px;
+        }
+    </style>
+
+    <!-- Firebase (para salvar tudo na nuvem - Firestore) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+</head>
+
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container-fluid">
+        <span class="navbar-brand">
+            <i class="fas fa-conveyor-belt"></i> Gestão de Correias Transportadoras
+        </span>
+
+        <span class="badge bg-light text-primary small-text">
+            Dados salvos localmente (offline) · Correias + Sistemas · QR Code
+        </span>
+    </div>
+</nav>
+
+<div id="indicadorSalvando" class="alert alert-info py-1 px-2 small-text">
+    <i class="fa-solid fa-floppy-disk"></i> Salvando...
+</div>
+
+<div class="container-fluid mt-3">
+
+    <!-- Abas -->
+    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#cadastro">
+                <i class="fas fa-clipboard-list"></i> Cadastro / Inspeção (Correias)
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#banco">
+                <i class="fas fa-database"></i> Banco de Dados & Filtros
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#sugestoes">
+                <i class="fas fa-lightbulb"></i> Sugestões & Melhorias
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dash">
+                <i class="fas fa-chart-line"></i> Dashboards & KPIs
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#fluxogramas">
+                <i class="fas fa-project-diagram"></i> Fluxogramas dos Sistemas
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#simulador">
+                <i class="fas fa-calculator"></i> Simulador de Massas
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#relatorio">
+                <i class="fas fa-file-pdf"></i> Relatório PDF (Correia)
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qrcode">
+                <i class="fas fa-qrcode"></i> QR Code – Correias & Sistemas
+            </button>
+        </li>
+
+    </ul>
+
+    <div class="tab-content">
+
+        <!-- CADASTRO / INSPEÇÃO CORREIAS -->
+        <div class="tab-pane fade show active" id="cadastro">
+            <form id="inspecaoForm" class="mt-3">
+                <input type="hidden" id="registroId">
+
+                <div class="d-flex justify-content-between mb-2">
+                    <div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnNovo">
+                            <i class="fa-solid fa-file-circle-plus"></i> Novo Registro
+                        </button>
+                    </div>
+                    <div class="small-text text-end">
+                        <span class="badge bg-secondary" id="totalRegistrosBadge">0 registros</span>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <!-- COLUNA 1 -->
+                    <div class="col-lg-6">
+                        <!-- Dados do Sistema -->
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                Dados do Sistema & Correia
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-2">
+                                    <label class="form-label">Sistema *</label>
+                                    <select id="sistema" class="form-select" required>
+                                        <option value="">Selecione</option>
+                                        <option value="Sul 1">🟦 Sul 1</option>
+                                        <option value="Sul 2">🟩 Sul 2</option>
+                                        <option value="Centro">🟨 Centro</option>
+                                        <option value="Norte">🟥 Norte</option>
+                                        <option value="Fazendão">🟪 Fazendão</option>
+                                        <option value="Marginal Vale">🔵 Marginal Vale</option>
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Código da Correia *</label>
+                                    <select id="codigoCorreia" class="form-select" required>
+                                        <option value="">Selecione</option>
+                                        <!-- Opções serão preenchidas via JavaScript -->
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Nome/Local da Correia</label>
+                                    <input type="text" id="nomeCorreia" class="form-control"
+                                           placeholder="Ex: Correia descarga do britador">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Tipo de Equipamento</label>
+                                    <select id="tipoEquipamento" class="form-select">
+                                        <option value="">Selecione</option>
+                                        <option value="Lokotrack">Lokotrack</option>
+                                        <option value="Stacker">Stacker</option>
+                                        <option value="Hopper">Hopper</option>
+                                        <option value="Correia">Correia Transportadora</option>
+                                        <option value="Carregador">Carregador</option>
+                                    </select>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label">Capacidade Nominal (t/h)</label>
+                                        <input type="number" id="capacidadeNominal" class="form-control">
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label">Capacidade Projetada (t/h)</label>
+                                        <input type="number" id="capacidadeProjetada" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Data da Inspeção</label>
+                                    <input type="date" id="dataInspecao" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Responsável pela Inspeção</label>
+                                    <input type="text" id="responsavelInspecao" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Turno</label>
+                                    <select id="turno" class="form-select">
+                                        <option value="">Selecione</option>
+                                        <option value="Turno A">Turno A</option>
+                                        <option value="Turno B">Turno B</option>
+                                        <option value="Turno C">Turno C</option>
+                                        <option value="Turno D">Turno D</option>
+                                        <option value="Infra A">Infra A</option>
+                                        <option value="Infra B">Infra B</option>
+                                        <option value="ADM">ADM</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- MECÂNICA -->
+                        <div class="card">
+                            <div class="card-header bg-danger text-white">
+                                MECÂNICA
+                            </div>
+                            <div class="card-body">
+                                <!-- Roletes/Tambores -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Roletes/Tambores</label>
+                                    <select id="condicaoRoletes" class="form-select condicao-mecanica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasRoletes" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-mecanica" multiple size="3">
+                                            <option value="Roletes travados">Roletes travados</option>
+                                            <option value="Roletes desgastados">Roletes desgastados</option>
+                                            <option value="Tambores desalinhados">Tambores desalinhados</option>
+                                            <option value="Tambores com desgaste">Tambores com desgaste</option>
+                                            <option value="Falta de roletes">Falta de roletes</option>
+                                            <option value="Rolamentos com ruído">Rolamentos com ruído</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-mecanica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Alinhamento -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Alinhamento</label>
+                                    <select id="condicaoAlinhamento" class="form-select condicao-mecanica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasAlinhamento" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-mecanica" multiple size="3">
+                                            <option value="Correia desalinhada">Correia desalinhada</option>
+                                            <option value="Estrutura desalinhada">Estrutura desalinhada</option>
+                                            <option value="Roletes desalinhados">Roletes desalinhados</option>
+                                            <option value="Tambores desalinhados">Tambores desalinhados</option>
+                                            <option value="Tensão irregular">Tensão irregular</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-mecanica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Emendas/Cobertura -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Emendas/Cobertura</label>
+                                    <select id="condicaoEmendas" class="form-select condicao-mecanica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasEmendas" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-mecanica" multiple size="3">
+                                            <option value="Emenda danificada">Emenda danificada</option>
+                                            <option value="Cobertura desgastada">Cobertura desgastada</option>
+                                            <option value="Rasgos na correia">Rasgos na correia</option>
+                                            <option value="Furos na correia">Furos na correia</option>
+                                            <option value="Descolamento da cobertura">Descolamento da cobertura</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-mecanica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Raspadores -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Raspadores</label>
+                                    <select id="condicaoRaspadores" class="form-select condicao-mecanica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasRaspadores" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-mecanica" multiple size="3">
+                                            <option value="Raspador desgastado">Raspador desgastado</option>
+                                            <option value="Raspador desalinhado">Raspador desalinhado</option>
+                                            <option value="Falta de pressão">Falta de pressão</option>
+                                            <option value="Raspador quebrado">Raspador quebrado</option>
+                                            <option value="Mecanismo danificado">Mecanismo danificado</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-mecanica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Vedação de Chutes -->
+                                <div class="mb-3">
+                                    <label class="form-label">Vedação de Chutes</label>
+                                    <select id="condicaoVedacao" class="form-select condicao-mecanica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasVedacao" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-mecanica" multiple size="3">
+                                            <option value="Vedação danificada">Vedação danificada</option>
+                                            <option value="Vazamento de material">Vazamento de material</option>
+                                            <option value="Folga excessiva">Folga excessiva</option>
+                                            <option value="Desgaste da borracha">Desgaste da borracha</option>
+                                            <option value="Fixação solta">Fixação solta</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-mecanica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Lubrificação -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Lubrificação</label>
+                                    <select id="condicaoLubrificacao" class="form-select condicao-mecanica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasLubrificacao" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-mecanica" multiple size="3">
+                                            <option value="Falta de lubrificante">Falta de lubrificante</option>
+                                            <option value="Vazamento de graxa">Vazamento de graxa</option>
+                                            <option value="Lubrificador com defeito">Lubrificador com defeito</option>
+                                            <option value="Contaminação do lubrificante">Contaminação do lubrificante</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-mecanica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Raspadores Secundários -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Raspadores Secundários</label>
+                                    <select id="condicaoRaspadoresSec" class="form-select condicao-mecanica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasRaspadoresSec" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-mecanica" multiple size="3">
+                                            <option value="Desgaste excessivo">Desgaste excessivo</option>
+                                            <option value="Falta de ajuste">Falta de ajuste</option>
+                                            <option value="Mecanismo travado">Mecanismo travado</option>
+                                            <option value="Acionamento com falha">Acionamento com falha</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-mecanica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Retorno Limpo -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Retorno Limpo</label>
+                                    <select id="condicaoRetorno" class="form-select condicao-mecanica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasRetorno" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-mecanica" multiple size="3">
+                                            <option value="Acúmulo de material">Acúmulo de material</option>
+                                            <option value="Raspador ineficiente">Raspador ineficiente</option>
+                                            <option value="Vazamento na cauda">Vazamento na cauda</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-mecanica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Roletes de Impacto -->
+                                <div class="mb-3">
+                                    <label class="form-label">Roletes de Impacto</label>
+                                    <select id="condicaoRoletesImpacto" class="form-select condicao-mecanica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasRoletesImpacto" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-mecanica" multiple size="3">
+                                            <option value="Roletes danificados">Roletes danificados</option>
+                                            <option value="Amortecedores gastos">Amortecedores gastos</option>
+                                            <option value="Falta de roletes">Falta de roletes</option>
+                                            <option value="Estrutura danificada">Estrutura danificada</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-mecanica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COLUNA 2 -->
+                    <div class="col-lg-6">
+                        <!-- ELÉTRICA -->
+                        <div class="card">
+                            <div class="card-header bg-warning text-white">
+                                ELÉTRICA
+                            </div>
+                            <div class="card-body">
+                                <!-- Motor (A/Temp) -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Motor (A/Temp)</label>
+                                    <select id="condicaoMotor" class="form-select condicao-eletrica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasMotor" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-eletrica" multiple size="3">
+                                            <option value="Superaquecimento">Superaquecimento</option>
+                                            <option value="Ruído anormal">Ruído anormal</option>
+                                            <option value="Vibração excessiva">Vibração excessiva</option>
+                                            <option value="Falha no acionamento">Falha no acionamento</option>
+                                            <option value="Isolamento danificado">Isolamento danificado</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-eletrica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+
+                                <!-- Proteções de Campo (Sensores) -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Proteções de Campo (chaves e sensores)</label>
+                                    <select id="condicaoProtecoesCampo" class="form-select condicao-eletrica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasProtecoesCampo" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-eletrica" multiple size="4">
+                                            <option value="Chave de desalinhamento com defeito">Chave de desalinhamento com defeito</option>
+                                            <option value="Sensor de velocidade inoperante">Sensor de velocidade inoperante</option>
+                                            <option value="Sensor anti-rasgo inoperante">Sensor anti-rasgo inoperante</option>
+                                            <option value="Sensor de nível com falha">Sensor de nível com falha</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-eletrica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Chaves, Cordoalhas e Botoeiras de Emergência -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Chaves, cordoalhas e botoeiras de emergência</label>
+                                    <select id="condicaoChavesEmergencia" class="form-select condicao-eletrica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasChavesEmergencia" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-eletrica" multiple size="4">
+                                            <option value="Cordoalha rompida">Cordoalha rompida</option>
+                                            <option value="Botoeira travada">Botoeira travada</option>
+                                            <option value="Chave de emergência inoperante">Chave de emergência inoperante</option>
+                                            <option value="Falha de retorno do comando">Falha de retorno do comando</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-eletrica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Iluminação do Local -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Condição de iluminação do local</label>
+                                    <select id="condicaoIluminacao" class="form-select condicao-eletrica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasIluminacao" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-eletrica" multiple size="3">
+                                            <option value="Lâmpadas queimadas">Lâmpadas queimadas</option>
+                                            <option value="Pontos com pouca iluminação">Pontos com pouca iluminação</option>
+                                            <option value="Luminárias danificadas">Luminárias danificadas</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-eletrica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Cabos Elétricos -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Condição dos cabos elétricos</label>
+                                    <select id="condicaoCabosEletricos" class="form-select condicao-eletrica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasCabosEletricos" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-eletrica" multiple size="4">
+                                            <option value="Cabo danificado / isolação comprometida">Cabo danificado / isolação comprometida</option>
+                                            <option value="Fixação inadequada dos cabos">Fixação inadequada dos cabos</option>
+                                            <option value="Emendas inadequadas">Emendas inadequadas</option>
+                                            <option value="Aquecimento anormal dos cabos">Aquecimento anormal dos cabos</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-eletrica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Painel de Comando -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Condição do painel de comando</label>
+                                    <select id="condicaoPainelComando" class="form-select condicao-eletrica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasPainelComando" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-eletrica" multiple size="4">
+                                            <option value="Ventilação insuficiente / temperatura elevada">Ventilação insuficiente / temperatura elevada</option>
+                                            <option value="Acúmulo de poeira / sujeira">Acúmulo de poeira / sujeira</option>
+                                            <option value="Disjuntores / contatores com mau contato">Disjuntores / contatores com mau contato</option>
+                                            <option value="Sinalização / etiquetas ilegíveis">Sinalização / etiquetas ilegíveis</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-eletrica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Câmera de Operação Remota -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Condição da câmera de operação remota</label>
+                                    <select id="condicaoCameraRemota" class="form-select condicao-eletrica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasCameraRemota" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-eletrica" multiple size="4">
+                                            <option value="Imagem sem qualidade / fora de foco">Imagem sem qualidade / fora de foco</option>
+                                            <option value="Perda de sinal / intermitência">Perda de sinal / intermitência</option>
+                                            <option value="Suporte / fixação da câmera danificado">Suporte / fixação da câmera danificado</option>
+                                            <option value="Não atende ao campo de visão necessário">Não atende ao campo de visão necessário</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-eletrica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Semáforo do Equipamento -->
+                                <div class="mb-3">
+                                    <label class="form-label">Funcionamento do semáforo do equipamento</label>
+                                    <select id="condicaoSemaforo" class="form-select condicao-eletrica">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasSemaforo" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas identificados:</label>
+                                        <select class="form-select form-select-sm problemas-eletrica" multiple size="4">
+                                            <option value="Semáforo apagado / não acende">Semáforo apagado / não acende</option>
+                                            <option value="Cores invertidas / sinalização incorreta">Cores invertidas / sinalização incorreta</option>
+                                            <option value="Intermitência no funcionamento">Intermitência no funcionamento</option>
+                                            <option value="Difícil visualização a distância">Difícil visualização a distância</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-eletrica obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+
+<!-- OPERAÇÃO -->
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                OPERAÇÃO
+                            </div>
+                            <div class="card-body">
+                                <!-- Parte Operacional -->
+                                <div class="mb-3 border-bottom pb-3">
+                                    <label class="form-label">Parte Operacional</label>
+                                    <select id="condicaoOperacional" class="form-select">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasOperacional" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas Operacionais:</label>
+                                        <select class="form-select form-select-sm" multiple size="4">
+                                            <option value="Operação fora da capacidade">Operação fora da capacidade</option>
+                                            <option value="Alimentação irregular">Alimentação irregular</option>
+                                            <option value="Paradas não programadas">Paradas não programadas</option>
+                                            <option value="Falta de treinamento">Falta de treinamento</option>
+                                            <option value="Procedimento inadequado">Procedimento inadequado</option>
+                                            <option value="Comunicação inadequada">Comunicação inadequada</option>
+                                            <option value="Falta de registro">Falta de registro</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Ambiental -->
+                                <div class="mb-3">
+                                    <label class="form-label">Ambiental</label>
+                                    <select id="condicaoAmbiental" class="form-select">
+                                        <option value="">Selecione</option>
+                                        <option value="OK">OK</option>
+                                        <option value="NÃO OK">NÃO OK</option>
+                                        <option value="NA">NA</option>
+                                    </select>
+                                    <div id="problemasAmbiental" class="mt-2 problema-container" style="display: none;">
+                                        <label class="small-text">Problemas Ambientais:</label>
+                                        <select class="form-select form-select-sm" multiple size="3">
+                                            <option value="Emissão de poeira">Emissão de poeira</option>
+                                            <option value="Vazamento de material">Vazamento de material</option>
+                                            <option value="Poluição sonora">Poluição sonora</option>
+                                            <option value="Descarte inadequado">Descarte inadequado</option>
+                                            <option value="Áreas sujas">Áreas sujas</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <label class="small-text">Observações:</label>
+                                            <textarea class="form-control form-control-sm obs-textarea" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ⚠️ Problemas & Diagnóstico -->
+                        <div class="card">
+                            <div class="card-header bg-info text-white">
+                                ⚠️ Problemas & Diagnóstico
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-2">
+                                    <label class="form-label">Diagnóstico Técnico</label>
+                                    <textarea id="diagnostico" class="form-control" rows="3"></textarea>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Soluções Recomendadas</label>
+                                    <textarea id="solucoes" class="form-control" rows="2"></textarea>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label d-block">Fotos da Correia</label>
+                                        <label for="fotosCorreiaInput" class="btn btn-outline-primary btn-sm mb-1">
+                                            <i class="fa-solid fa-camera"></i> Tirar/Enviar Fotos
+                                        </label>
+                                        <input type="file" id="fotosCorreiaInput" class="form-control d-none"
+                                               accept="image/*" capture="environment" multiple>
+                                        <div class="form-text small-text">
+                                            Máximo recomendado: 4 fotos por correia.
+                                        </div>
+                                        <div id="previewFotos" class="d-flex flex-wrap gap-2 mt-2"></div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-2">
+                                    <label class="form-label">Observações Gerais</label>
+                                    <textarea id="observacoes" class="form-control" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mb-3">
+                    <div>
+                        <button type="button" class="btn btn-success" id="btnSalvar">
+                            <i class="fa-solid fa-save"></i> Salvar / Atualizar
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btnLimpar">
+                            <i class="fa-solid fa-eraser"></i> Limpar formulário
+                        </button>
+                        <button type="button" class="btn btn-outline-info ms-2" id="btnImportarBackup">
+                            <i class="fa-solid fa-file-import"></i> Importar Backup
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Input de arquivo para importar backup JSON -->
+                <input type="file" id="backupFileInput" accept="application/json,.json" class="d-none">
+
+            </form>
+        </div>
+
+        <!-- BANCO DE DADOS & FILTROS -->
+        <div class="tab-pane fade" id="banco">
+            <div class="mt-3">
+                <div class="card mb-3">
+                    <div class="card-header bg-secondary text-white">
+                        Filtros de Pesquisa (Correias)
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <label class="form-label">Sistema</label>
+                                <select id="filtroSistema" class="form-select">
+                                    <option value="">Todos</option>
+                                    <option value="Sul 1">Sul 1</option>
+                                    <option value="Sul 2">Sul 2</option>
+                                    <option value="Centro">Centro</option>
+                                    <option value="Norte">Norte</option>
+                                    <option value="Fazendão">Fazendão</option>
+                                    <option value="Marginal Vale">Marginal Vale</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Código</label>
+                                <input type="text" id="filtroCodigo" class="form-control">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Status Crítico</label>
+                                <select id="filtroStatus" class="form-select">
+                                    <option value="">Todos</option>
+                                    <option value="CRITICO">🔴 Crítico</option>
+                                    <option value="ATENCAO">🟠 Atenção</option>
+                                    <option value="OBSERVACAO">🟡 Observação</option>
+                                    <option value="NORMAL">🟢 Normal</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Tipo</label>
+                                <select id="filtroTipo" class="form-select">
+                                    <option value="">Todos</option>
+                                    <option value="Lokotrack">Lokotrack</option>
+                                    <option value="Stacker">Stacker</option>
+                                    <option value="Hopper">Hopper</option>
+                                    <option value="Correia">Correia</option>
+                                    <option value="Carregador">Carregador</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-3 d-flex justify-content-between">
+                            <div>
+                                <button class="btn btn-primary btn-sm me-2" id="btnAplicarFiltros">
+                                    <i class="fa-solid fa-filter"></i> Aplicar filtros
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" id="btnLimparFiltros">
+                                    Limpar filtros
+                                </button>
+                            </div>
+                            <div>
+                                <button class="btn btn-outline-success btn-sm me-2" id="btnExportarBackup">
+                                    <i class="fa-solid fa-file-export"></i> Exportar Backup
+                                </button>
+                                <button class="btn btn-outline-success btn-sm me-2" id="btnExportarBackupExcel">
+                                    <i class="fa-solid fa-file-excel"></i> Exportar Backup Excel / Macro
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm" id="btnApagarTudo">
+                                    <i class="fa-solid fa-trash"></i> Apagar TODOS os registros
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-2 small-text text-muted">
+                            O backup inclui todas as correias e sistemas salvos. Ao importar, os dados são
+                            <strong>mesclados</strong> com o que já existe.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        Registros de Correias Salvos
+                    </div>
+                    <div class="card-body table-responsive">
+                        <table class="table table-sm table-striped align-middle" id="tabelaRegistros">
+                            <thead class="table-light">
+                            <tr>
+                                <th>Código</th>
+                                <th>Sistema</th>
+                                <th>Nome</th>
+                                <th>Capacidade</th>
+                                <th>Status</th>
+                                <th>Data Insp.</th>
+                                <th>Problemas</th>
+                                <th>Ações</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card mt-3">
+                    <div class="card-header bg-light">
+                        Visualização do Backup (JSON)
+                    </div>
+                    <div class="card-body">
+                        <textarea id="jsonOutput" class="form-control small-text" rows="4"
+                                  placeholder="Clique em Exportar Backup para visualizar / copiar o JSON."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        
+        <!-- SUGESTÕES & MELHORIAS -->
+        <div class="tab-pane fade" id="sugestoes">
+            <div class="mt-3">
+                <div class="row g-3">
+                    <div class="col-lg-6">
+                        <div class="card mb-3">
+                            <div class="card-header bg-purple text-white">
+                                Registro de Sugestões / Melhorias
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Data</label>
+                                        <input type="date" id="sugData" class="form-control">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Responsável / Facilitador</label>
+                                        <input type="text" id="sugResponsavel" class="form-control" placeholder="Nome de quem está sugerindo">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Sistema</label>
+                                        <select id="sugSistema" class="form-select">
+                                            <option value="">(Opcional)</option>
+                                            <option value="Sul 1">Sul 1</option>
+                                            <option value="Sul 2">Sul 2</option>
+                                            <option value="Norte">Norte</option>
+                                            <option value="Centro">Centro</option>
+                                            <option value="Fazendão">Fazendão</option>
+                                            <option value="Marginal Vale">Marginal Vale</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Código / Equipamento</label>
+                                        <input type="text" id="sugCodigo" class="form-control" placeholder="Ex.: 11CV24, Hopper 13, Lokotrack 03">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Descrição da sugestão / problema / melhoria *</label>
+                                        <textarea id="sugTexto" class="form-control" rows="4" placeholder="Digite aqui o relato completo..."></textarea>
+                                    </div>
+                                </div>
+                                <div class="mt-3 d-flex justify-content-between align-items-center">
+                                    <button class="btn btn-outline-primary" id="btnRegistrarSugestao">
+                                        <i class="fas fa-check-double"></i> Registrar sugestão
+                                    </button>
+                                </div>
+                                <div class="mt-3 small-text" id="sugResultado">
+                                    <!-- Feedback da análise automática aparece aqui -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                Sugestões Registradas (Histórico)
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover align-middle" id="tabelaSugestoes">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Data</th>
+                                                <th>Sistema</th>
+                                                <th>Código</th>
+                                                <th>Prioridade</th>
+                                                <th>Responsável</th>
+                                                <th>Tags</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- preenchido via JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+<!-- DASHBOARDS -->
+        <div class="tab-pane fade" id="dash">
+            <div class="mt-3" id="dashConteudo">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="card text-bg-light">
+                            <div class="card-body">
+                                <div class="small-text text-muted">Total de Correias</div>
+                                <div class="h4" id="kpiTotalCorreias">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-bg-light">
+                            <div class="card-body">
+                                <div class="small-text text-muted">🔴 Críticas</div>
+                                <div class="h4" id="kpiCriticas">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-bg-light">
+                            <div class="card-body">
+                                <div class="small-text text-muted">🟠 Atenção</div>
+                                <div class="h4" id="kpiAtencao">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-bg-light">
+                            <div class="card-body">
+                                <div class="small-text text-muted">🟢 Normais</div>
+                                <div class="h4" id="kpiNormais">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-header bg-secondary text-white">
+                                Status das Correias
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="statusChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-header bg-secondary text-white">
+                                Distribuição por Sistema
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="sistemaChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-header bg-secondary text-white">
+                                Problemas Mais Frequentes (Pareto)
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="problemasChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-header bg-secondary text-white">
+                                Capacidade por Sistema (t/h)
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="capacidadeChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-lg-12">
+                        <div class="card">
+                            <div class="card-header bg-secondary text-white">
+                                Inspeções por Responsável / Turno
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="respTurnoChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-3 small-text text-muted">
+                    Os gráficos são calculados em cima de todos os registros de correias salvos no navegador.
+                </div>
+            </div>
+        </div>
+
+        <!-- FLUXOGRAMAS -->
+        <div class="tab-pane fade" id="fluxogramas">
+            <div class="mt-3">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="fas fa-project-diagram"></i> Fluxogramas dos Sistemas de Correias
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header bg-info text-white">
+                                        🟦 Sul 1
+                                    </div>
+                                    <div class="card-body small-text">
+                                        <strong>Fluxo:</strong> 11CR12 → 11CV72 → 02CV002 → USINA<br>
+                                        <strong>Capacidades:</strong> 2915 t/h → 2200 t/h → 3970 t/h<br>
+                                        <strong>Gargalo:</strong> 11CV72 (2200 t/h)
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header bg-success text-white">
+                                        🟩 Sul 2
+                                    </div>
+                                    <div class="card-body small-text">
+                                        <strong>Fluxo:</strong> 11LKT03 → 11CR14 → 11CV67 → 11CV73 → USINA<br>
+                                        <strong>Capacidades:</strong> 2000 t/h → 2915 t/h → 3840 t/h → 2500 t/h<br>
+                                        <strong>Gargalo:</strong> 11LKT03 (2000 t/h)
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header bg-warning text-white">
+                                        🟨 Centro
+                                    </div>
+                                    <div class="card-body small-text">
+                                        <strong>Fluxo:</strong> Hopper 13 → 11CR13 → 11CV21 → 11CV64 → 11LK01 → 11CV20 → 02CV037 → 02CV038 → 02CV039 → 02CV040 → 02CV041 → USINA<br>
+                                        <strong>Capacidades:</strong> 1640 t/h → 2500 t/h<br>
+                                        <strong>Gargalo:</strong> Hopper 13 (1640 t/h)
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header bg-danger text-white">
+                                        🟥 Norte
+                                    </div>
+                                    <div class="card-body small-text">
+                                        <strong>Fluxo:</strong> 11CR10 → 11CV23 → 11CV24 → USINA<br>
+                                        <strong>Capacidades:</strong> 1640 t/h → 2500 t/h → 2915 t/h<br>
+                                        <strong>Gargalo:</strong> 11CR10 (1640 t/h)
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header bg-purple text-white">
+                                        🟪 Fazendão
+                                    </div>
+                                    <div class="card-body small-text">
+                                        <strong>Fluxo:</strong> Lokotrack 02 → 11LK02 → USINA<br>
+                                        <strong>Capacidades:</strong> 2000 t/h → 2166 t/h<br>
+                                        <strong>Gargalo:</strong> Lokotrack 02 (2000 t/h)
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header bg-primary text-white">
+                                        🔵 Marginal Vale
+                                    </div>
+                                    <div class="card-body small-text">
+                                        <strong>Fluxo:</strong> 11CR03 → 11CV70 → VALE<br>
+                                        <strong>Capacidades:</strong> 1640 t/h → 2915 t/h<br>
+                                        <strong>Gargalo:</strong> 11CR03 (1640 t/h)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIMULADOR DE MASSAS (versão compacta baseada no gargalo) -->
+        <div class="tab-pane fade" id="simulador">
+            <div class="mt-3">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="fas fa-calculator"></i> Simulador de Massas - Sistema de Correias (Gargalo)
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Selecione os Sistemas para Simulação:</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="checkSul1" value="Sul 1">
+                                    <label class="form-check-label" for="checkSul1">
+                                        🟦 Sul 1 (Gargalo: 2200 t/h)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="checkSul2" value="Sul 2">
+                                    <label class="form-check-label" for="checkSul2">
+                                        🟩 Sul 2 (Gargalo: 2000 t/h)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="checkCentro" value="Centro">
+                                    <label class="form-check-label" for="checkCentro">
+                                        🟨 Centro (Gargalo: 1640 t/h)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="checkNorte" value="Norte">
+                                    <label class="form-check-label" for="checkNorte">
+                                        🟥 Norte (Gargalo: 1640 t/h)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="checkFazendao" value="Fazendão">
+                                    <label class="form-check-label" for="checkFazendao">
+                                        🟪 Fazendão (Gargalo: 2000 t/h)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="checkVale" value="Marginal Vale">
+                                    <label class="form-check-label" for="checkVale">
+                                        🔵 Marginal Vale (Gargalo: 1640 t/h)
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6>Resultado da Simulação</h6>
+                                        <div id="resultadoSimulacao">
+                                            <p class="mb-1">Capacidade Total: <strong id="capTotal">0</strong> t/h</p>
+                                            <p class="mb-1">Produção por Turno (12h): <strong id="prodTurno">0</strong> t</p>
+                                            <p class="mb-1">Produção por Dia (24h): <strong id="prodDia">0</strong> t</p>
+                                            <p class="mb-0">Produção Mensal (30 dias): <strong id="prodMes">0</strong> t</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" id="btnCalcular">
+                            <i class="fas fa-calculator"></i> Calcular Produção
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RELATÓRIO PDF -->
+        <div class="tab-pane fade" id="relatorio">
+            <div class="mt-3">
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        Gerar Relatório PDF por Correia
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label">Selecione a Correia</label>
+                                <select id="relatorioCorreiaSelect" class="form-select">
+                                    <!-- Preenchido via JS -->
+                                </select>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <button class="btn btn-outline-secondary me-2" id="btnAtualizarPreview">
+                                    <i class="fa-solid fa-eye"></i> Atualizar Prévia
+                                </button>
+                                <button class="btn btn-danger" id="btnGerarPDF">
+                                    <i class="fa-solid fa-file-pdf"></i> Gerar PDF
+                                </button>
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Data inicial (opcional)</label>
+                                <input type="date" id="relDataIni" class="form-control">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Data final (opcional)</label>
+                                <input type="date" id="relDataFim" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Período / Campanha</label>
+                                <input type="text" id="relPeriodo" class="form-control"
+                                       placeholder="Ex.: Semana 44/2025 · Campanha Sul 1">
+                            </div>
+                        </div>
+                        <div class="small-text text-muted mt-2">
+                            O relatório traz dados de cadastro, condições críticas/preventivas, problemas, diagnóstico,
+                            soluções e fotos (versão reduzida para não ficar pesado).
+                        </div>
+                    </div>
+                </div>
+
+                <div id="relatorioPreview">
+                    <div class="text-center mb-2">
+                        <h5>RELATÓRIO DE INSPEÇÃO DE CORREIAS TRANSPORTADORAS</h5>
+                        <div class="small-text text-muted">
+                            Gestão de Correias · Samarco – Modelo QR / Offline
+                        </div>
+                    </div>
+                    <div id="relatorioConteudo">
+                        <p class="text-muted small-text">Selecione uma correia e clique em "Atualizar Prévia".</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- QR CODE – CORREIAS & SISTEMAS -->
+        <div class="tab-pane fade" id="qrcode">
+            <div class="mt-3">
+                <div class="row g-3">
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <i class="fa-solid fa-qrcode"></i> Gerar QR Code da Correia
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-2">
+                                    <label class="form-label">Selecione a Correia</label>
+                                    <select id="qrCorreiaSelect" class="form-select">
+                                        <!-- Preenchido via JS -->
+                                    </select>
+                                </div>
+                                <div class="qr-box border rounded" id="qrcodeBox">
+                                    <!-- QR Code aparece aqui -->
+                                </div>
+                                <div class="mt-2 d-flex justify-content-between">
+                                    <div class="small-text text-muted">
+                                        O QR traz o ID da correia. Ao ler, o app abre o cadastro automaticamente.
+                                    </div>
+                                    <button class="btn btn-outline-primary btn-sm" id="btnBaixarQR">
+                                        <i class="fa-solid fa-download"></i> Baixar PNG
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <i class="fa-solid fa-camera"></i> Leitor de QR Code
+                            </div>
+                            <div class="card-body">
+                                <div class="camera-warning">
+                                    Para a câmera funcionar no celular é recomendado abrir este arquivo em um endereço
+                                    <strong>https://</strong> ou <strong>http://localhost</strong>.
+                                </div>
+                                <div id="reader"></div>
+                                <div class="mt-2 small-text">
+                                    <strong>Resultado:</strong> <span id="scanResult" class="text-muted">Aguardando leitura...</span>
+                                </div>
+                                <div class="mt-2">
+                                    <button class="btn btn-outline-secondary btn-sm" id="btnPararLeitura">
+                                        <i class="fa-solid fa-stop"></i> Parar Leitura
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-3 small-text text-muted">
+                    Estratégia: gerar QR Codes por correia/equipamento, imprimir e colar em campo.
+                    O técnico lê o QR, o app sobe o cadastro completo, mostra situação atual e permite atualizar,
+                    gerar relatório e compartilhar.
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // ===== CHAVES E ESTRUTURAS BÁSICAS =====
+    const STORAGE_KEY = 'correias_qrcode_db_v2';
+
+    // ===== FIREBASE / NUVEM (Firestore) =====
+    // 1) Crie um projeto no Firebase, habilite Firestore e cole aqui a configuração do seu app Web.
+    // 2) Se você deixar projectId vazio, o app continua 100% offline (localStorage) como está hoje.
+    const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBQoo7fENe2mk_qmy20AE5eEwfEKs-ZKeY",
+  authDomain: "qrcode-correia-naza-audit.firebaseapp.com",
+  projectId: "qrcode-correia-naza-audit",
+  storageBucket: "qrcode-correia-naza-audit.firebasestorage.app",
+  messagingSenderId: "857708812761",
+  appId: "1:857708812761:web:0576b1c029c8599851e1c8"
+};
+
+    // Nome único do "banco" deste app no Firestore (um documento só, simples e rápido)
+    const FIRESTORE_DOC_PATH = { collection: "apps", doc: "correias_qrcode_db_v2" };
+
+    let cloud = {
+        enabled: false,
+        db: null,
+        unsub: null,
+        lastRemoteUpdatedAtIso: null,
+        applyingRemote: false,
+        saveTimer: null
+    };
+
+    function initCloud() {
+        try {
+            if (!window.firebase || !FIREBASE_CONFIG || !FIREBASE_CONFIG.projectId) return false;
+            if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+            cloud.db = firebase.firestore();
+            cloud.enabled = true;
+
+            // Reduz latência em redes ruins e permite modo offline do Firestore
+            // (O Firestore já faz cache automaticamente no navegador moderno.)
+            return true;
+        } catch (e) {
+            console.warn("Cloud desativada (erro ao iniciar Firebase):", e);
+            cloud.enabled = false;
+            cloud.db = null;
+            return false;
+        }
+    }
+
+    async function cloudLoadState() {
+        if (!cloud.enabled || !cloud.db) return null;
+        try {
+            const ref = cloud.db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc);
+            const snap = await ref.get();
+            if (!snap.exists) return null;
+            const d = snap.data() || {};
+            return d;
+        } catch (e) {
+            console.warn("Falha ao carregar da nuvem, usando offline:", e);
+            return null;
+        }
+    }
+
+    function scheduleCloudSave(pacote) {
+        if (!cloud.enabled || !cloud.db) return;
+        if (cloud.applyingRemote) return; // evita loop quando estamos aplicando mudança vinda da nuvem
+
+        // debounce: evita salvar a cada tecla/clique em sequência
+        clearTimeout(cloud.saveTimer);
+        cloud.saveTimer = setTimeout(async () => {
+            try {
+                const ref = cloud.db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc);
+                await ref.set({
+                    version: pacote.version || 2,
+                    updatedAtIso: pacote.updatedAt || new Date().toISOString(),
+                    registros: Array.isArray(pacote.registros) ? pacote.registros : [],
+                    sugestoes: Array.isArray(pacote.sugestoes) ? pacote.sugestoes : []
+                }, { merge: true });
+                cloud.lastRemoteUpdatedAtIso = pacote.updatedAt || new Date().toISOString();
+            } catch (e) {
+                console.warn("Falha ao salvar na nuvem:", e);
+            }
+        }, 600);
+    }
+
+    function startCloudRealtimeSync(onRemoteApplied) {
+        if (!cloud.enabled || !cloud.db) return;
+        try {
+            const ref = cloud.db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc);
+
+            if (cloud.unsub) cloud.unsub();
+            cloud.unsub = ref.onSnapshot((snap) => {
+                if (!snap.exists) return;
+                const d = snap.data() || {};
+                const remoteIso = d.updatedAtIso || null;
+                if (!remoteIso) return;
+
+                // Ignora se já estamos na mesma versão do remoto
+                if (cloud.lastRemoteUpdatedAtIso && remoteIso === cloud.lastRemoteUpdatedAtIso) return;
+
+                // Aplica remoto
+                cloud.applyingRemote = true;
+                cloud.lastRemoteUpdatedAtIso = remoteIso;
+
+                registros = Array.isArray(d.registros) ? d.registros : [];
+                sugestoes = Array.isArray(d.sugestoes) ? d.sugestoes : [];
+
+                // Atualiza offline também (sem re-subir imediatamente)
+                try {
+                    const pacoteLocal = { version: 2, updatedAt: remoteIso, registros, sugestoes };
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(pacoteLocal));
+                } catch (e) {}
+
+                cloud.applyingRemote = false;
+                if (typeof onRemoteApplied === "function") onRemoteApplied();
+            }, (err) => {
+                console.warn("Realtime sync desligado:", err);
+            });
+        } catch (e) {
+            console.warn("Não foi possível iniciar realtime sync:", e);
+        }
+    }
+
+    let registros = []; // array de correias
+    let sugestoes = []; // sugestões / melhorias dos facilitadores
+    let charts = {
+        statusChart: null,
+        sistemaChart: null,
+        problemasChart: null,
+        capacidadeChart: null,
+        respTurnoChart: null
+    };
+    let html5QrScanner = null;
+
+    // Mapa dos sistemas do simulador para o cadastro
+    const systemsData = {
+        "Fazendão": {
+            equipments: [
+                { id: "fazendao_1", name: "Lokotrack 02", nominal: 2000, code: "Lokotrack 02", tipo: "Lokotrack" },
+                { id: "fazendao_2", name: "11LK02", nominal: 2166, code: "11LK02", tipo: "Stacker" }
+            ],
+            gargalo: 2000
+        },
+        "Alegria Centro": {
+            equipments: [
+                { id: "centro_1", name: "Hopper 13", nominal: 1640, code: "11CR13", tipo: "Hopper" },
+                { id: "centro_2", name: "Correias", nominal: 2500, code: "11CV21" , tipo: "Correia" },
+                { id: "centro_3", name: "Correias", nominal: 2500, code: "11CV64" , tipo: "Correia" },
+                { id: "centro_4", name: "Locotrack", nominal: 2500, code: "11LK01" , tipo: "Locotrack"},
+                { id: "centro_5", name: "Correias", nominal: 2500, code: "11CV20" , tipo: "Correia" },
+                { id: "centro_6", name: "Correias", nominal: 2500, code: "11CV37" , tipo: "Correia" },
+                { id: "centro_7", name: "Correias", nominal: 2500, code: "11CV38" , tipo: "Correia" },
+                { id: "centro_8", name: "Correias", nominal: 2500, code: "11CV39" , tipo: "Correia" },
+                { id: "centro_9", name: "Correias", nominal: 2500, code: "11CV40" , tipo: "Correia" },
+                { id: "centro_10", name: "Correias", nominal:2500, code: "11CV41" , tipo: "Correia" },
+
+            ],
+            gargalo: 1640
+        },
+        "Alegria Norte": {
+            equipments: [
+                { id: "norte_1", name: "11CR10", nominal: 1640, code: "11CR10", tipo: "Carregador" },
+                { id: "norte_2", name: "11CV23", nominal: 2500, code: "11CV23", tipo: "Correia" },
+                { id: "norte_3", name: "11CV24", nominal: 2915, code: "11CV24", tipo: "Correia" }
+            ],
+            gargalo: 1640
+        },
+        "Alegria Sul 1": {
+            equipments: [
+                { id: "sul1_1", name: "11CR12", nominal: 2915, code: "11CR12", tipo: "Hopper" },
+                { id: "sul1_2", name: "11CV72", nominal: 2200, code: "11CV72", tipo: "Correia" },
+                { id: "sul1_3", name: "02CV002", nominal: 3970, code: "02CV002", tipo: "Stacker" }
+            ],
+            gargalo: 2200
+        },
+        "Alegria Sul 2": {
+            equipments: [
+                { id: "sul2_1", name: "11LKT03", nominal: 2000, project: 2640, code: "11LKT03", tipo: "Lokotrack" },
+                { id: "sul2_2", name: "11CR14 (Hopper 19)", nominal: 2915, project: 3500, code: "11CR14", tipo: "Hopper" },
+                { id: "sul2_3", name: "11CV67", nominal: 3840, code: "11CV67", tipo: "Correia" },
+                { id: "sul2_4", name: "11CV73", nominal: 2500, code: "11CV73", tipo: "Correia" }
+            ],
+            gargalo: 2000
+        },
+        "Marginal Vale": {
+            equipments: [
+                { id: "vale_1", name: "11CR03", nominal: 1640, code: "11CR03", tipo: "Hopper" },
+                { id: "vale_2", name: "11CV70", nominal: 2915, code: "11CV70", tipo: "Correia" }
+            ],
+            gargalo: 1640
+        }
+    };
+
+    // Mapa de rótulos do select para a key de systemsData
+    const SYSTEM_MAP = {
+        "Sul 1": "Alegria Sul 1",
+        "Sul 2": "Alegria Sul 2",
+        "Centro": "Alegria Centro",
+        "Norte": "Alegria Norte",
+        "Fazendão": "Fazendão",
+        "Marginal Vale": "Marginal Vale"
+    };
+
+    // ===== UTILITÁRIOS =====
+    function mostrarIndicadorSalvando() {
+        const el = document.getElementById('indicadorSalvando');
+        el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, 800);
+    }
+
+    function gerarId() {
+        return 'C' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
+    }
+
+    function getStatusCritico(reg) {
+        // Verificar condições críticas (MECÂNICA)
+        const criticos = ['condicaoRoletes', 'condicaoAlinhamento', 'condicaoEmendas', 'condicaoRaspadores', 'condicaoVedacao'];
+        let temNaoOkCritico = false;
+        criticos.forEach(c => {
+            if (reg[c] === 'NÃO OK') temNaoOkCritico = true;
+        });
+        if (temNaoOkCritico) return 'CRITICO';
+
+        // Verificar condições preventivas (ELÉTRICAS)
+        const preventivas = ['condicaoLubrificacao', 'condicaoMotor', 'condicaoRaspadoresSec', 'condicaoRetorno', 'condicaoRoletesImpacto'];
+        let temNaoOkPrev = false;
+        preventivas.forEach(c => {
+            if (reg[c] === 'NÃO OK') temNaoOkPrev = true;
+        });
+        if (temNaoOkPrev) return 'ATENCAO';
+
+        // Verificar melhorias & observações
+        const melhorias = ['condicaoOperacional', 'condicaoAmbiental'];
+        let temNaoOkMel = false;
+        melhorias.forEach(c => {
+            if (reg[c] === 'NÃO OK') temNaoOkMel = true;
+        });
+        if (temNaoOkMel) return 'OBSERVACAO';
+
+        return 'NORMAL';
+    }
+
+    function statusBadge(status) {
+        if (status === 'CRITICO') return '<span class="badge critical-badge">🔴 Crítico</span>';
+        if (status === 'ATENCAO') return '<span class="badge attention-badge">🟠 Atenção</span>';
+        if (status === 'OBSERVACAO') return '<span class="badge observation-badge">🟡 Observação</span>';
+        return '<span class="badge safe-badge">🟢 Normal</span>';
+    }
+
+    function formatCapacidade(cNom, cProj) {
+        if (!cNom && !cProj) return '-';
+        if (cNom && !cProj) return cNom + ' t/h';
+        if (!cNom && cProj) return cProj + ' t/h (proj)';
+        return cNom + ' / ' + cProj + ' t/h';
+    }
+
+    // ===== FUNÇÕES PARA AS NOVAS CAIXAS DINÂMICAS =====
+    function configurarEventosCondicoes() {
+        // Eventos para condições mecânicas
+        document.querySelectorAll('.condicao-mecanica').forEach(select => {
+            select.addEventListener('change', function() {
+                const containerId = this.id.replace('condicao', 'problemas');
+                const container = document.getElementById(containerId);
+                if (container) {
+                    container.style.display = this.value === 'NÃO OK' ? 'block' : 'none';
+                    // Limpar seleções quando ocultar
+                    if (this.value !== 'NÃO OK') {
+                        const problemasSelect = container.querySelector('.problemas-mecanica');
+                        const obsTextarea = container.querySelector('.obs-mecanica');
+                        if (problemasSelect) {
+                            Array.from(problemasSelect.options).forEach(opt => opt.selected = false);
+                        }
+                        if (obsTextarea) obsTextarea.value = '';
+                    }
+                }
+            });
+        });
+
+        // Eventos para condições elétricas
+        document.querySelectorAll('.condicao-eletrica').forEach(select => {
+            select.addEventListener('change', function() {
+                const containerId = this.id.replace('condicao', 'problemas');
+                const container = document.getElementById(containerId);
+                if (container) {
+                    container.style.display = this.value === 'NÃO OK' ? 'block' : 'none';
+                    // Limpar seleções quando ocultar
+                    if (this.value !== 'NÃO OK') {
+                        const problemasSelect = container.querySelector('.problemas-eletrica');
+                        const obsTextarea = container.querySelector('.obs-eletrica');
+                        if (problemasSelect) {
+                            Array.from(problemasSelect.options).forEach(opt => opt.selected = false);
+                        }
+                        if (obsTextarea) obsTextarea.value = '';
+                    }
+                }
+            });
+        });
+
+        // Eventos para Melhorias & Observações
+        const operacionalSelect = document.getElementById('condicaoOperacional');
+        const ambientalSelect = document.getElementById('condicaoAmbiental');
+        
+        if (operacionalSelect) {
+            operacionalSelect.addEventListener('change', function() {
+                const container = document.getElementById('problemasOperacional');
+                if (container) {
+                    container.style.display = this.value === 'NÃO OK' ? 'block' : 'none';
+                    if (this.value !== 'NÃO OK') {
+                        const problemasSelect = container.querySelector('select');
+                        const obsTextarea = container.querySelector('textarea');
+                        if (problemasSelect) {
+                            Array.from(problemasSelect.options).forEach(opt => opt.selected = false);
+                        }
+                        if (obsTextarea) obsTextarea.value = '';
+                    }
+                }
+            });
+        }
+        
+        if (ambientalSelect) {
+            ambientalSelect.addEventListener('change', function() {
+                const container = document.getElementById('problemasAmbiental');
+                if (container) {
+                    container.style.display = this.value === 'NÃO OK' ? 'block' : 'none';
+                    if (this.value !== 'NÃO OK') {
+                        const problemasSelect = container.querySelector('select');
+                        const obsTextarea = container.querySelector('textarea');
+                        if (problemasSelect) {
+                            Array.from(problemasSelect.options).forEach(opt => opt.selected = false);
+                        }
+                        if (obsTextarea) obsTextarea.value = '';
+                    }
+                }
+            });
+        }
+    }
+
+    // ===== SUGESTÕES / MELHORIAS – ANÁLISE AUTOMÁTICA =====
+    function analisarTextoSugestaoSimples(texto) {
+        const t = (texto || '').toLowerCase();
+        const tags = [];
+
+        const addTag = (tag, palavras) => {
+            if (palavras.some(p => t.includes(p))) {
+                tags.push(tag);
+            }
+        };
+
+        addTag('SEGURANCA', ['segurança', 'seguranca', 'risco', 'acidente', 'epi', 'queda']);
+        addTag('LIMPEZA', ['limpeza', 'sujar', 'sujidade', 'material acumulado', 'acúmulo', 'acumulo']);
+        addTag('ROLETES', ['rolete', 'roletes']);
+        addTag('RASPADOR', ['raspador', 'raspadores']);
+        addTag('VEDACAO', ['vedação', 'vedacao']);
+        addTag('SENSOR', ['sensor', 'chave', 'intertravamento']);
+        addTag('TREINAMENTO', ['treinamento', 'capacitação', 'capacitacao', 'reciclagem']);
+        addTag('AMBIENTAL', ['poeira', 'pó', 'po', 'água', 'agua', 'lama', 'resíduo', 'residuo']);
+        addTag('SAP', ['sap', 'ordem', 'om ', 'os ']);
+        addTag('FLUXO_MATERIAL', ['nível alto', 'nivel alto', 'entupido', 'obstruído', 'obstruido', 'fluxo', 'retomada']);
+
+        let prioridade = 'MÉDIA';
+        if (
+            t.includes('parada') || t.includes('parou') ||
+            t.includes('travado') || t.includes('travou') ||
+            t.includes('falha') || t.includes('quebrado') ||
+            t.includes('risco') || t.includes('crítico') || t.includes('critico')
+        ) {
+            prioridade = 'ALTA';
+        } else if (
+            t.includes('sugestão') || t.includes('sugestao') ||
+            t.includes('melhoria') || t.includes('otimização') || t.includes('otimizacao')
+        ) {
+            prioridade = 'BAIXA';
+        }
+
+        const resumo = texto && texto.length > 140 ? texto.slice(0, 137) + '...' : (texto || '');
+
+        return { tags, prioridade, resumo };
+    }
+
+    function registrarSugestao() {
+        const dataCampo = document.getElementById('sugData');
+        const respCampo = document.getElementById('sugResponsavel');
+        const sisCampo = document.getElementById('sugSistema');
+        const codCampo = document.getElementById('sugCodigo');
+        const txtCampo = document.getElementById('sugTexto');
+
+        const texto = (txtCampo && txtCampo.value || '').trim();
+        if (!texto) {
+            alert('Descreva a sugestão / problema antes de registrar.');
+            if (txtCampo) txtCampo.focus();
+            return;
+        }
+
+        const analise = analisarTextoSugestaoSimples(texto);
+        const sug = {
+            id: 'SUG-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+            data: (dataCampo && dataCampo.value) || new Date().toISOString().slice(0, 10),
+            responsavel: (respCampo && respCampo.value || '').trim(),
+            sistema: (sisCampo && sisCampo.value) || '',
+            codigo: (codCampo && codCampo.value || '').trim(),
+            texto,
+            prioridade: analise.prioridade,
+            tags: analise.tags,
+            resumo: analise.resumo
+        };
+
+        if (!Array.isArray(sugestoes)) sugestoes = [];
+        sugestoes.push(sug);
+        salvarNoLocalStorage();
+        preencherTabelaSugestoes();
+
+        const resEl = document.getElementById('sugResultado');
+        if (resEl) {
+            const cls =
+                analise.prioridade === 'ALTA' ? 'badge bg-danger' :
+                analise.prioridade === 'MÉDIA' ? 'badge bg-warning text-dark' :
+                'badge bg-success';
+            resEl.innerHTML =
+                '<strong>Análise automática:</strong> prioridade ' +
+                '<span class="' + cls + '">' + analise.prioridade + '</span>' +
+                (analise.tags.length
+                    ? ' · tags sugeridas: <span class="text-muted">' + analise.tags.join(', ') + '</span>'
+                    : ' · texto genérico, sem tags específicas.');
+        }
+
+        if (txtCampo) txtCampo.value = '';
+    }
+
+    function preencherTabelaSugestoes() {
+        const tbody = document.querySelector('#tabelaSugestoes tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        if (!Array.isArray(sugestoes) || sugestoes.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="7" class="text-center text-muted small-text">Nenhuma sugestão registrada até o momento.</td>';
+            tbody.appendChild(tr);
+            return;
+        }
+
+        // Ordenar por prioridade (ALTA primeiro) e depois por data
+        sugestoes.sort((a, b) => {
+            const prioridadeOrder = { 'ALTA': 1, 'MÉDIA': 2, 'BAIXA': 3 };
+            if (prioridadeOrder[a.prioridade] !== prioridadeOrder[b.prioridade]) {
+                return prioridadeOrder[a.prioridade] - prioridadeOrder[b.prioridade];
+            }
+            return new Date(b.data) - new Date(a.data);
+        });
+
+        sugestoes.forEach(s => {
+            const tr = document.createElement('tr');
+            const prioridade = s.prioridade || 'MÉDIA';
+            const badgeClass =
+                prioridade === 'ALTA' ? 'badge bg-danger' :
+                prioridade === 'MÉDIA' ? 'badge bg-warning text-dark' :
+                'badge bg-success';
+
+            tr.innerHTML =
+                '<td>' + (s.data || '-') + '</td>' +
+                '<td>' + (s.sistema || '-') + '</td>' +
+                '<td>' + (s.codigo || '-') + '</td>' +
+                '<td><span class="' + badgeClass + '">' + prioridade + '</span></td>' +
+                '<td>' + (s.responsavel || '-') + '</td>' +
+                '<td class="small-text">' + ((s.tags || []).join(', ') || '-') + '</td>' +
+                '<td>' +
+                    '<button class="btn btn-sm btn-outline-danger btn-excluir-sugestao" data-id="' + s.id + '">' +
+                        '<i class="fa-solid fa-trash"></i>' +
+                    '</button>' +
+                '</td>';
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    function lerFotosBase64DoRegistro(reg) {
+        return reg.fotosBase64 || [];
+    }
+
+    // ===== LOCALSTORAGE =====
+    function carregarDoLocalStorage() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) {
+                registros = [];
+                sugestoes = [];
+                return;
+            }
+            const parsed = JSON.parse(raw);
+
+            // Compatibilidade com versões antigas
+            if (Array.isArray(parsed)) {
+                registros = parsed;
+                sugestoes = [];
+            } else if (parsed && typeof parsed === 'object') {
+                if (Array.isArray(parsed.registros)) {
+                    registros = parsed.registros;
+                } else {
+                    registros = [];
+                }
+                if (Array.isArray(parsed.sugestoes)) {
+                    sugestoes = parsed.sugestoes;
+                } else if (Array.isArray(parsed.sugestoesIA)) {
+                    sugestoes = parsed.sugestoesIA; // Compatibilidade com versão anterior
+                } else {
+                    sugestoes = [];
+                }
+            } else {
+                registros = [];
+                sugestoes = [];
+            }
+        } catch (e) {
+            console.error('Erro ao carregar do localStorage', e);
+            registros = [];
+            sugestoes = [];
+        }
+    }
+
+    function salvarNoLocalStorage() {
+        try {
+            const pacote = {
+                version: 2,
+                updatedAt: new Date().toISOString(),
+                registros,
+                sugestoes
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(pacote));
+            scheduleCloudSave(pacote);
+            mostrarIndicadorSalvando();
+        } catch (e) {
+            alert('Erro ao salvar dados. Verifique o espaço disponível.');
+            console.error('Erro ao salvar', e);
+        }
+    }
+
+    // ===== FORM / CADASTRO =====
+    function limparFormulario() {
+        document.getElementById('inspecaoForm').reset();
+        document.getElementById('registroId').value = '';
+        document.getElementById('previewFotos').innerHTML = '';
+        
+        // Limpar todas as caixas de problemas
+        document.querySelectorAll('.problema-container').forEach(container => {
+            container.style.display = 'none';
+            const select = container.querySelector('select');
+            const textarea = container.querySelector('textarea');
+            if (select) Array.from(select.options).forEach(opt => opt.selected = false);
+            if (textarea) textarea.value = '';
+        });
+    }
+
+    function preencherCodigoCorreiaOptions() {
+        const sistemaSelect = document.getElementById('sistema');
+        const codigoSelect = document.getElementById('codigoCorreia');
+        codigoSelect.innerHTML = '<option value="">Selecione</option>';
+
+        const valSis = sistemaSelect.value;
+        if (!valSis) return;
+
+        const sysKey = SYSTEM_MAP[valSis];
+        const sys = systemsData[sysKey];
+        if (!sys) return;
+
+        sys.equipments.forEach(eq => {
+            const opt = document.createElement('option');
+            opt.value = eq.code;
+            opt.textContent = eq.code + (eq.name && eq.name !== eq.code ? ' - ' + eq.name : '');
+            codigoSelect.appendChild(opt);
+        });
+    }
+
+    function aoSelecionarCodigoCorreia() {
+        const sistemaSelect = document.getElementById('sistema');
+        const codigoSelect = document.getElementById('codigoCorreia');
+        const tipoSelect = document.getElementById('tipoEquipamento');
+        const capNomInput = document.getElementById('capacidadeNominal');
+        const capProjInput = document.getElementById('capacidadeProjetada');
+
+        const valSis = sistemaSelect.value;
+        const valCod = codigoSelect.value;
+        if (!valSis || !valCod) return;
+
+        const sysKey = SYSTEM_MAP[valSis];
+        const sys = systemsData[sysKey];
+        if (!sys) return;
+
+        const eq = sys.equipments.find(e => e.code === valCod);
+        if (!eq) return;
+
+        tipoSelect.value = eq.tipo || '';
+        capNomInput.value = eq.nominal || '';
+        if (eq.project) {
+            capProjInput.value = eq.project;
+        } else {
+            capProjInput.value = '';
+        }
+    }
+
+    function coletarDadosFormulario() {
+        const form = document.getElementById('inspecaoForm');
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return null;
+        }
+
+        const get = id => {
+            const el = document.getElementById(id);
+            return el ? el.value || '' : '';
+        };
+
+        const fotosBase64 = [];
+        const preview = document.getElementById('previewFotos');
+        if (preview) {
+            preview.querySelectorAll('img').forEach(img => {
+                if (img.dataset.base64) fotosBase64.push(img.dataset.base64);
+            });
+        }
+
+        // Coletar problemas mecânicos
+        const problemasMecanica = {};
+        document.querySelectorAll('.condicao-mecanica').forEach(select => {
+            if (select.value === 'NÃO OK') {
+                const containerId = select.id.replace('condicao', 'problemas');
+                const container = document.getElementById(containerId);
+                if (container) {
+                    const problemasSelect = container.querySelector('.problemas-mecanica');
+                    const obsTextarea = container.querySelector('.obs-mecanica');
+                    
+                    const problemas = problemasSelect ? 
+                        Array.from(problemasSelect.selectedOptions).map(opt => opt.value) : [];
+                    const observacoes = obsTextarea ? obsTextarea.value : '';
+                    
+                    problemasMecanica[select.id] = {
+                        problemas: problemas,
+                        observacoes: observacoes
+                    };
+                }
+            }
+        });
+
+        // Coletar problemas elétricos
+        const problemasEletrica = {};
+        document.querySelectorAll('.condicao-eletrica').forEach(select => {
+            if (select.value === 'NÃO OK') {
+                const containerId = select.id.replace('condicao', 'problemas');
+                const container = document.getElementById(containerId);
+                if (container) {
+                    const problemasSelect = container.querySelector('.problemas-eletrica');
+                    const obsTextarea = container.querySelector('.obs-eletrica');
+                    
+                    const problemas = problemasSelect ? 
+                        Array.from(problemasSelect.selectedOptions).map(opt => opt.value) : [];
+                    const observacoes = obsTextarea ? obsTextarea.value : '';
+                    
+                    problemasEletrica[select.id] = {
+                        problemas: problemas,
+                        observacoes: observacoes
+                    };
+                }
+            }
+        });
+
+        // Coletar problemas operacionais e ambientais
+        let problemasOperacional = null;
+        let problemasAmbiental = null;
+        
+        if (get('condicaoOperacional') === 'NÃO OK') {
+            const container = document.getElementById('problemasOperacional');
+            if (container) {
+                const problemasSelect = container.querySelector('select');
+                const obsTextarea = container.querySelector('textarea');
+                
+                problemasOperacional = {
+                    problemas: problemasSelect ? 
+                        Array.from(problemasSelect.selectedOptions).map(opt => opt.value) : [],
+                    observacoes: obsTextarea ? obsTextarea.value : ''
+                };
+            }
+        }
+
+        if (get('condicaoAmbiental') === 'NÃO OK') {
+            const container = document.getElementById('problemasAmbiental');
+            if (container) {
+                const problemasSelect = container.querySelector('select');
+                const obsTextarea = container.querySelector('textarea');
+                
+                problemasAmbiental = {
+                    problemas: problemasSelect ? 
+                        Array.from(problemasSelect.selectedOptions).map(opt => opt.value) : [],
+                    observacoes: obsTextarea ? obsTextarea.value : ''
+                };
+            }
+        }
+
+        let reg = {
+            id: document.getElementById('registroId').value || gerarId(),
+            sistema: get('sistema'),
+            codigo: get('codigoCorreia'),
+            nomeCorreia: get('nomeCorreia'),
+            tipoEquipamento: get('tipoEquipamento'),
+            capacidadeNominal: get('capacidadeNominal'),
+            capacidadeProjetada: get('capacidadeProjetada'),
+            dataInspecao: get('dataInspecao'),
+            responsavelInspecao: get('responsavelInspecao'),
+            turno: get('turno'),
+
+            // Condições Mecânicas
+            condicaoRoletes: get('condicaoRoletes'),
+            condicaoAlinhamento: get('condicaoAlinhamento'),
+            condicaoEmendas: get('condicaoEmendas'),
+            condicaoRaspadores: get('condicaoRaspadores'),
+            condicaoVedacao: get('condicaoVedacao'),
+
+            // Condições Elétricas
+            condicaoLubrificacao: get('condicaoLubrificacao'),
+            condicaoMotor: get('condicaoMotor'),
+            condicaoRaspadoresSec: get('condicaoRaspadoresSec'),
+            condicaoRetorno: get('condicaoRetorno'),
+            condicaoRoletesImpacto: get('condicaoRoletesImpacto'),
+
+            // Melhorias & Observações
+            condicaoOperacional: get('condicaoOperacional'),
+            condicaoAmbiental: get('condicaoAmbiental'),
+
+            // Problemas detalhados
+            problemasMecanica: problemasMecanica,
+            problemasEletrica: problemasEletrica,
+            problemasOperacional: problemasOperacional,
+            problemasAmbiental: problemasAmbiental,
+
+            // Outros campos
+            diagnostico: get('diagnostico'),
+            solucoes: get('solucoes'),
+            observacoes: get('observacoes'),
+
+            fotosBase64
+        };
+
+        // Gerar lista consolidada de problemas para o dashboard
+        const todosProblemas = [];
+        
+        // Adicionar problemas mecânicos
+        Object.values(problemasMecanica).forEach(item => {
+            if (item.problemas && item.problemas.length > 0) {
+                todosProblemas.push(...item.problemas);
+            }
+        });
+        
+        // Adicionar problemas elétricos
+        Object.values(problemasEletrica).forEach(item => {
+            if (item.problemas && item.problemas.length > 0) {
+                todosProblemas.push(...item.problemas);
+            }
+        });
+        
+        // Adicionar problemas operacionais e ambientais
+        if (problemasOperacional && problemasOperacional.problemas) {
+            todosProblemas.push(...problemasOperacional.problemas);
+        }
+        
+        if (problemasAmbiental && problemasAmbiental.problemas) {
+            todosProblemas.push(...problemasAmbiental.problemas);
+        }
+        
+        reg.problemasIdentificados = todosProblemas;
+        reg.statusCritico = getStatusCritico(reg);
+        
+        return reg;
+    }
+
+    function salvarRegistro() {
+        const reg = coletarDadosFormulario();
+        if (!reg) return;
+
+        const idx = registros.findIndex(r => r.id === reg.id);
+        if (idx >= 0) {
+            registros[idx] = reg;
+        } else {
+            registros.push(reg);
+        }
+        salvarNoLocalStorage();
+        atualizarContadorRegistros();
+        preencherTabelaRegistros();
+        atualizarDashboards();
+        atualizarSelectsRelatorioEQR();
+
+        alert('Registro salvo/atualizado com sucesso!');
+    }
+
+    function atualizarContadorRegistros() {
+        const badge = document.getElementById('totalRegistrosBadge');
+        if (badge) {
+            badge.innerText = `${registros.length} registros`;
+        }
+    }
+
+    function carregarRegistroNoFormulario(id) {
+        const reg = registros.find(r => r.id === id);
+        if (!reg) return;
+
+        const set = (id, val) => { 
+            const el = document.getElementById(id);
+            if (el) el.value = val || ''; 
+        };
+
+        document.getElementById('registroId').value = reg.id;
+        set('sistema', reg.sistema);
+
+        // Preencher opções de código baseado no sistema
+        preencherCodigoCorreiaOptions();
+        // Aguardar um momento para garantir que as opções foram carregadas
+        setTimeout(() => {
+            set('codigoCorreia', reg.codigo);
+        }, 100);
+
+        set('nomeCorreia', reg.nomeCorreia);
+        set('tipoEquipamento', reg.tipoEquipamento);
+        set('capacidadeNominal', reg.capacidadeNominal);
+        set('capacidadeProjetada', reg.capacidadeProjetada);
+        set('dataInspecao', reg.dataInspecao);
+        set('responsavelInspecao', reg.responsavelInspecao);
+        set('turno', reg.turno);
+
+        // Restaurar condições mecânicas
+        set('condicaoRoletes', reg.condicaoRoletes);
+        set('condicaoAlinhamento', reg.condicaoAlinhamento);
+        set('condicaoEmendas', reg.condicaoEmendas);
+        set('condicaoRaspadores', reg.condicaoRaspadores);
+        set('condicaoVedacao', reg.condicaoVedacao);
+
+        // Restaurar condições elétricas
+        set('condicaoLubrificacao', reg.condicaoLubrificacao);
+        set('condicaoMotor', reg.condicaoMotor);
+        set('condicaoRaspadoresSec', reg.condicaoRaspadoresSec);
+        set('condicaoRetorno', reg.condicaoRetorno);
+        set('condicaoRoletesImpacto', reg.condicaoRoletesImpacto);
+
+        // Restaurar melhorias & observações
+        set('condicaoOperacional', reg.condicaoOperacional);
+        set('condicaoAmbiental', reg.condicaoAmbiental);
+
+        // Restaurar problemas mecânicos
+        if (reg.problemasMecanica) {
+            Object.keys(reg.problemasMecanica).forEach(key => {
+                const select = document.getElementById(key);
+                if (select && select.value === 'NÃO OK') {
+                    const containerId = key.replace('condicao', 'problemas');
+                    const container = document.getElementById(containerId);
+                    if (container) {
+                        container.style.display = 'block';
+                        
+                        const dados = reg.problemasMecanica[key];
+                        const problemasSelect = container.querySelector('.problemas-mecanica');
+                        const obsTextarea = container.querySelector('.obs-mecanica');
+                        
+                        if (problemasSelect && dados.problemas) {
+                            Array.from(problemasSelect.options).forEach(option => {
+                                option.selected = dados.problemas.includes(option.value);
+                            });
+                        }
+                        
+                        if (obsTextarea && dados.observacoes) {
+                            obsTextarea.value = dados.observacoes;
+                        }
+                    }
+                }
+            });
+        }
+
+        // Restaurar problemas elétricos
+        if (reg.problemasEletrica) {
+            Object.keys(reg.problemasEletrica).forEach(key => {
+                const select = document.getElementById(key);
+                if (select && select.value === 'NÃO OK') {
+                    const containerId = key.replace('condicao', 'problemas');
+                    const container = document.getElementById(containerId);
+                    if (container) {
+                        container.style.display = 'block';
+                        
+                        const dados = reg.problemasEletrica[key];
+                        const problemasSelect = container.querySelector('.problemas-eletrica');
+                        const obsTextarea = container.querySelector('.obs-eletrica');
+                        
+                        if (problemasSelect && dados.problemas) {
+                            Array.from(problemasSelect.options).forEach(option => {
+                                option.selected = dados.problemas.includes(option.value);
+                            });
+                        }
+                        
+                        if (obsTextarea && dados.observacoes) {
+                            obsTextarea.value = dados.observacoes;
+                        }
+                    }
+                }
+            });
+        }
+
+        // Restaurar problemas operacionais
+        if (reg.condicaoOperacional === 'NÃO OK' && reg.problemasOperacional) {
+            const container = document.getElementById('problemasOperacional');
+            if (container) {
+                container.style.display = 'block';
+                const problemasSelect = container.querySelector('select');
+                const obsTextarea = container.querySelector('textarea');
+                
+                if (problemasSelect && reg.problemasOperacional.problemas) {
+                    Array.from(problemasSelect.options).forEach(option => {
+                        option.selected = reg.problemasOperacional.problemas.includes(option.value);
+                    });
+                }
+                
+                if (obsTextarea && reg.problemasOperacional.observacoes) {
+                    obsTextarea.value = reg.problemasOperacional.observacoes;
+                }
+            }
+        }
+
+        // Restaurar problemas ambientais
+        if (reg.condicaoAmbiental === 'NÃO OK' && reg.problemasAmbiental) {
+            const container = document.getElementById('problemasAmbiental');
+            if (container) {
+                container.style.display = 'block';
+                const problemasSelect = container.querySelector('select');
+                const obsTextarea = container.querySelector('textarea');
+                
+                if (problemasSelect && reg.problemasAmbiental.problemas) {
+                    Array.from(problemasSelect.options).forEach(option => {
+                        option.selected = reg.problemasAmbiental.problemas.includes(option.value);
+                    });
+                }
+                
+                if (obsTextarea && reg.problemasAmbiental.observacoes) {
+                    obsTextarea.value = reg.problemasAmbiental.observacoes;
+                }
+            }
+        }
+
+        // Restaurar outros campos
+        set('diagnostico', reg.diagnostico);
+        set('solucoes', reg.solucoes);
+        set('observacoes', reg.observacoes);
+
+        // Restaurar fotos
+        const preview = document.getElementById('previewFotos');
+        if (preview) {
+            preview.innerHTML = '';
+            (reg.fotosBase64 || []).forEach(b64 => {
+                const img = document.createElement('img');
+                img.src = b64;
+                img.className = 'foto-preview';
+                img.dataset.base64 = b64;
+                preview.appendChild(img);
+            });
+        }
+
+        // Mudar para a aba de cadastro
+        const tab = new bootstrap.Tab(document.querySelector('button[data-bs-target="#cadastro"]'));
+        tab.show();
+    }
+
+    // ===== TABELA / BANCO =====
+    function aplicarFiltros() {
+        const s = document.getElementById('filtroSistema') ? document.getElementById('filtroSistema').value : '';
+        const cod = document.getElementById('filtroCodigo') ? document.getElementById('filtroCodigo').value.toLowerCase() : '';
+        const st = document.getElementById('filtroStatus') ? document.getElementById('filtroStatus').value : '';
+        const tp = document.getElementById('filtroTipo') ? document.getElementById('filtroTipo').value : '';
+
+        return registros.filter(r => {
+            if (s && r.sistema !== s) return false;
+            if (cod && !(r.codigo || '').toLowerCase().includes(cod)) return false;
+            if (st && r.statusCritico !== st) return false;
+            if (tp && r.tipoEquipamento !== tp) return false;
+            return true;
+        });
+    }
+
+    function preencherTabelaRegistros() {
+        const tbody = document.querySelector('#tabelaRegistros tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        const fil = aplicarFiltros();
+        if (fil.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="8" class="text-center text-muted">Nenhum registro encontrado.</td>';
+            tbody.appendChild(tr);
+            return;
+        }
+
+        fil.forEach(reg => {
+            const tr = document.createElement('tr');
+
+            const problemasResumo = (reg.problemasIdentificados || []).slice(0, 2).join(', ');
+            const problemasTexto = problemasResumo || '-';
+
+            tr.innerHTML = `
+                <td>${reg.codigo || '-'}</td>
+                <td>${reg.sistema || '-'}</td>
+                <td>${reg.nomeCorreia || '-'}</td>
+                <td>${formatCapacidade(reg.capacidadeNominal, reg.capacidadeProjetada)}</td>
+                <td>${statusBadge(reg.statusCritico)}</td>
+                <td>${reg.dataInspecao || '-'}</td>
+                <td class="small-text">${problemasTexto}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary me-1 btn-editar" data-id="${reg.id}">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger me-1 btn-excluir" data-id="${reg.id}">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary me-1 btn-relatorio" data-id="${reg.id}">
+                        <i class="fa-solid fa-file-pdf"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-dark btn-qr" data-id="${reg.id}">
+                        <i class="fa-solid fa-qrcode"></i>
+                    </button>
+                </td>
+            `;
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    // ===== BACKUP / EXPORTAÇÃO =====
+    function exportarBackup() {
+        const pacote = {
+            version: 2,
+            updatedAt: new Date().toISOString(),
+            registros,
+            sugestoes
+        };
+        const json = JSON.stringify(pacote, null, 2);
+        const output = document.getElementById('jsonOutput');
+        if (output) {
+            output.value = json;
+        }
+
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'correias_backup.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function exportarBackupExcelMacro() {
+        if (typeof XLSX === 'undefined') {
+            alert('Biblioteca XLSX não carregada. Verifique a conexão ou o bloqueio de scripts.');
+            return;
+        }
+
+        const dadosRegistros = (registros || []).map((r, index) => ({
+            ID: r.id || ('REG-' + (index + 1)),
+            Sistema: r.sistema || '',
+            CodigoCorreia: r.codigo || '',
+            NomeCorreia: r.nomeCorreia || '',
+            TipoEquipamento: r.tipoEquipamento || '',
+            CapacidadeNominal_th: r.capacidadeNominal || '',
+            CapacidadeProjetada_th: r.capacidadeProjetada || '',
+            DataInspecao: r.dataInspecao || '',
+            ResponsavelInspecao: r.responsavelInspecao || '',
+            Turno: r.turno || '',
+            Cond_Roletes: r.condicaoRoletes || '',
+            Cond_Alinhamento: r.condicaoAlinhamento || '',
+            Cond_Emendas: r.condicaoEmendas || '',
+            Cond_Raspadores: r.condicaoRaspadores || '',
+            Cond_Vedacao: r.condicaoVedacao || '',
+            Cond_Lubrificacao: r.condicaoLubrificacao || '',
+            Cond_Motor: r.condicaoMotor || '',
+            Cond_RaspadoresSec: r.condicaoRaspadoresSec || '',
+            Cond_Retorno: r.condicaoRetorno || '',
+            Cond_RoletesImpacto: r.condicaoRoletesImpacto || '',
+            Cond_Treinamento: r.condicaoTreinamento || '',
+            Cond_RegistroFalhas: r.condicaoRegistro || '',
+            Cond_Sensores: r.condicaoSensores || '',
+            Cond_Ambiental: r.condicaoAmbiental || '',
+            ProblemasIdentificados: (r.problemasIdentificados || []).join(' | '),
+            Diagnostico: r.diagnostico || '',
+            SolucoesPropostas: r.solucoes || '',
+            ObservacoesGerais: r.observacoes || '',
+            StatusCritico: r.statusCritico || '',
+            FotosQtd: (r.fotosBase64 || []).length || 0
+        }));
+
+        const wb = XLSX.utils.book_new();
+        const wsReg = XLSX.utils.json_to_sheet(dadosRegistros);
+        XLSX.utils.book_append_sheet(wb, wsReg, 'Correias');
+
+        const dadosSug = (sugestoes || []).map((s, index) => ({
+            ID: s.id || ('SUG-' + (index + 1)),
+            Data: s.data || '',
+            Responsavel: s.responsavel || '',
+            Sistema: s.sistema || '',
+            Codigo: s.codigo || '',
+            Prioridade: s.prioridade || '',
+            Tags: (s.tags || []).join(' | '),
+            TextoCompleto: s.texto || ''
+        }));
+
+        if (dadosSug.length > 0) {
+            const wsSug = XLSX.utils.json_to_sheet(dadosSug);
+            XLSX.utils.book_append_sheet(wb, wsSug, 'Sugestoes');
+        }
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsm', type: 'array' });
+        const blob = new Blob([wbout], { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'correias_backup_macro.xlsm';
+        a.click();
+        URL.revokeObjectURL(url);
+
+        const output = document.getElementById('jsonOutput');
+        if (output) {
+            output.value =
+                'Backup Excel/Macro gerado com ' + dadosRegistros.length + ' registros de correias e ' +
+                dadosSug.length + ' sugestões registradas.\n' +
+                'Use este arquivo como base para suas rotinas VBA/SAP.';
+        }
+    }
+
+    function importarBackupArquivo(arquivo) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const txt = e.target.result;
+                const parsed = JSON.parse(txt);
+                let novosReg = [];
+                let novasSug = [];
+
+                if (Array.isArray(parsed)) {
+                    novosReg = parsed;
+                } else {
+                    if (Array.isArray(parsed.registros)) novosReg = parsed.registros;
+                    if (Array.isArray(parsed.sugestoes)) novasSug = parsed.sugestoes;
+                    else if (Array.isArray(parsed.sugestoesIA)) novasSug = parsed.sugestoesIA; // Compatibilidade
+                }
+
+                if (!Array.isArray(novosReg)) novosReg = [];
+
+                novosReg.forEach(nv => {
+                    const idx = registros.findIndex(r => r.id === nv.id);
+                    if (idx >= 0) {
+                        registros[idx] = nv;
+                    } else {
+                        registros.push(nv);
+                    }
+                });
+
+                if (!Array.isArray(sugestoes)) sugestoes = [];
+                (novasSug || []).forEach(ns => {
+                    if (!ns.id) {
+                        ns.id = 'SUG-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+                    }
+                    const idxS = sugestoes.findIndex(s => s.id === ns.id);
+                    if (idxS >= 0) {
+                        sugestoes[idxS] = ns;
+                    } else {
+                        sugestoes.push(ns);
+                    }
+                });
+
+                salvarNoLocalStorage();
+                atualizarContadorRegistros();
+                preencherTabelaRegistros();
+                atualizarDashboards();
+                atualizarSelectsRelatorioEQR();
+                preencherTabelaSugestoes();
+
+                alert('Backup importado e mesclado com sucesso!');
+            } catch (err) {
+                console.error(err);
+                alert('Erro ao importar backup JSON.');
+            }
+        };
+        reader.readAsText(arquivo, 'utf-8');
+    }
+
+    // ===== DASHBOARDS =====
+    function atualizarDashboards() {
+        const total = registros.length;
+        const criticos = registros.filter(r => r.statusCritico === 'CRITICO').length;
+        const atencao = registros.filter(r => r.statusCritico === 'ATENCAO').length;
+        const observacao = registros.filter(r => r.statusCritico === 'OBSERVACAO').length;
+        const normal = registros.filter(r => r.statusCritico === 'NORMAL').length;
+
+        const kpiTotal = document.getElementById('kpiTotalCorreias');
+        const kpiCriticas = document.getElementById('kpiCriticas');
+        const kpiAtencao = document.getElementById('kpiAtencao');
+        const kpiNormais = document.getElementById('kpiNormais');
+        
+        if (kpiTotal) kpiTotal.innerText = total;
+        if (kpiCriticas) kpiCriticas.innerText = criticos;
+        if (kpiAtencao) kpiAtencao.innerText = atencao;
+        if (kpiNormais) kpiNormais.innerText = normal;
+
+        // Status Chart
+        const ctxStatus = document.getElementById('statusChart');
+        if (ctxStatus) {
+            if (charts.statusChart) charts.statusChart.destroy();
+            charts.statusChart = new Chart(ctxStatus.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Crítico', 'Atenção', 'Observação', 'Normal'],
+                    datasets: [{
+                        label: 'Qtd',
+                        data: [criticos, atencao, observacao, normal],
+                        backgroundColor: ['#dc3545', '#fd7e14', '#ffc107', '#198754']
+                    }]
+                },
+                options: { 
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // Sistema Chart
+        const porSistema = {};
+        registros.forEach(r => {
+            if (!r.sistema) return;
+            porSistema[r.sistema] = (porSistema[r.sistema] || 0) + 1;
+        });
+        const ctxSis = document.getElementById('sistemaChart');
+        if (ctxSis) {
+            if (charts.sistemaChart) charts.sistemaChart.destroy();
+            charts.sistemaChart = new Chart(ctxSis.getContext('2d'), {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(porSistema),
+                    datasets: [{
+                        data: Object.values(porSistema),
+                        backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6f42c1', '#0dcaf0']
+                    }]
+                },
+                options: { responsive: true }
+            });
+        }
+
+        // Problemas (Pareto)
+        const contProblemas = {};
+        registros.forEach(r => {
+            (r.problemasIdentificados || []).forEach(p => {
+                contProblemas[p] = (contProblemas[p] || 0) + 1;
+            });
+        });
+        const probsOrdenados = Object.entries(contProblemas).sort((a, b) => b[1] - a[1]);
+        const labelsP = probsOrdenados.map(p => p[0]).slice(0, 10);
+        const dataP = probsOrdenados.map(p => p[1]).slice(0, 10);
+
+        const ctxProb = document.getElementById('problemasChart');
+        if (ctxProb) {
+            if (charts.problemasChart) charts.problemasChart.destroy();
+            charts.problemasChart = new Chart(ctxProb.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labelsP,
+                    datasets: [{
+                        label: 'Ocorrências',
+                        data: dataP,
+                        backgroundColor: '#6c757d'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // Capacidade por Sistema
+        const capPorSistema = {};
+        registros.forEach(r => {
+            const c = parseFloat(r.capacidadeNominal) || 0;
+            if (!r.sistema || !c) return;
+            capPorSistema[r.sistema] = (capPorSistema[r.sistema] || 0) + c;
+        });
+        const ctxCap = document.getElementById('capacidadeChart');
+        if (ctxCap) {
+            if (charts.capacidadeChart) charts.capacidadeChart.destroy();
+            charts.capacidadeChart = new Chart(ctxCap.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(capPorSistema),
+                    datasets: [{
+                        label: 'Capacidade Nominal (soma) t/h',
+                        data: Object.values(capPorSistema),
+                        backgroundColor: '#0d6efd'
+                    }]
+                },
+                options: { 
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // Inspeções por Responsável / Turno
+        const mapaRespTurno = {};
+        registros.forEach(r => {
+            const resp = (r.responsavelInspecao || 'Não informado').trim();
+            const turno = (r.turno || 'S/ turno').trim();
+            const chave = `${resp} (${turno})`;
+            mapaRespTurno[chave] = (mapaRespTurno[chave] || 0) + 1;
+        });
+        const labelsRT = Object.keys(mapaRespTurno);
+        const dadosRT = Object.values(mapaRespTurno);
+
+        const ctxRT = document.getElementById('respTurnoChart');
+        if (ctxRT) {
+            if (charts.respTurnoChart) charts.respTurnoChart.destroy();
+            charts.respTurnoChart = new Chart(ctxRT.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labelsRT,
+                    datasets: [{
+                        label: 'Inspeções',
+                        data: dadosRT,
+                        backgroundColor: '#6c757d'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { beginAtZero: true, ticks: { precision: 0 } }
+                    }
+                }
+            });
+        }
+    }
+
+    // ===== SIMULADOR (GARGALO POR SISTEMA) =====
+    function calcularSimulador() {
+        const selecionados = [];
+        if (document.getElementById('checkSul1') && document.getElementById('checkSul1').checked) selecionados.push('Sul 1');
+        if (document.getElementById('checkSul2') && document.getElementById('checkSul2').checked) selecionados.push('Sul 2');
+        if (document.getElementById('checkCentro') && document.getElementById('checkCentro').checked) selecionados.push('Centro');
+        if (document.getElementById('checkNorte') && document.getElementById('checkNorte').checked) selecionados.push('Norte');
+        if (document.getElementById('checkFazendao') && document.getElementById('checkFazendao').checked) selecionados.push('Fazendão');
+        if (document.getElementById('checkVale') && document.getElementById('checkVale').checked) selecionados.push('Marginal Vale');
+
+        let capTotal = 0;
+        selecionados.forEach(s => {
+            const key = SYSTEM_MAP[s];
+            const sys = systemsData[key];
+            if (sys) capTotal += sys.gargalo;
+        });
+
+        const turno = capTotal * 12;
+        const dia = capTotal * 24;
+        const mes = capTotal * 24 * 30;
+
+        const capTotalEl = document.getElementById('capTotal');
+        const prodTurnoEl = document.getElementById('prodTurno');
+        const prodDiaEl = document.getElementById('prodDia');
+        const prodMesEl = document.getElementById('prodMes');
+        
+        if (capTotalEl) capTotalEl.innerText = capTotal.toLocaleString('pt-BR');
+        if (prodTurnoEl) prodTurnoEl.innerText = turno.toLocaleString('pt-BR');
+        if (prodDiaEl) prodDiaEl.innerText = dia.toLocaleString('pt-BR');
+        if (prodMesEl) prodMesEl.innerText = mes.toLocaleString('pt-BR');
+    }
+
+    // ===== RELATÓRIO PDF =====
+    function atualizarSelectsRelatorioEQR() {
+        const relSel = document.getElementById('relatorioCorreiaSelect');
+        const qrSel = document.getElementById('qrCorreiaSelect');
+
+        if (!relSel || !qrSel) return;
+
+        const ordenados = [...registros].sort((a, b) => {
+            const sa = (a.sistema || '') + (a.codigo || '');
+            const sb = (b.sistema || '') + (b.codigo || '');
+            return sa.localeCompare(sb);
+        });
+
+        relSel.innerHTML = '<option value="">Selecione</option>';
+        qrSel.innerHTML = '<option value="">Selecione</option>';
+        ordenados.forEach(r => {
+            const label = `[${r.sistema || '-'}] ${r.codigo || '-'} - ${r.nomeCorreia || ''}`;
+            const opt1 = document.createElement('option');
+            opt1.value = r.id;
+            opt1.textContent = label;
+            relSel.appendChild(opt1);
+
+            const opt2 = document.createElement('option');
+            opt2.value = r.id;
+            opt2.textContent = label;
+            qrSel.appendChild(opt2);
+        });
+    }
+
+    function montarPreviewRelatorio(id) {
+        const reg = registros.find(r => r.id === id);
+        const container = document.getElementById('relatorioConteudo');
+        if (!container) return;
+
+        const fotosDiv = document.createElement('div');
+        fotosDiv.id = 'relatorioFotos';
+
+        if (!reg) {
+            container.innerHTML = '<p class="text-muted small-text">Registro não encontrado.</p>';
+            return;
+        }
+
+        const dataIni = document.getElementById('relDataIni') ? document.getElementById('relDataIni').value : '';
+        const dataFim = document.getElementById('relDataFim') ? document.getElementById('relDataFim').value : '';
+        const periodoTexto = document.getElementById('relPeriodo') ? document.getElementById('relPeriodo').value : '';
+
+        let blocoPeriodo = '';
+        if (dataIni || dataFim || periodoTexto) {
+            blocoPeriodo = `
+            <div class="linha small-text">
+                <strong>Período analisado:</strong>
+                ${dataIni || '...'} até ${dataFim || '...'}
+                ${periodoTexto ? ' – ' + periodoTexto : ''}
+            </div>`;
+        }
+
+        // Construir lista de problemas mecânicos
+        let problemasMecanicaHTML = '';
+        if (reg.problemasMecanica) {
+            Object.entries(reg.problemasMecanica).forEach(([key, dados]) => {
+                if (dados.problemas && dados.problemas.length > 0) {
+                    const itemNome = key.replace('condicao', '').replace(/([A-Z])/g, ' $1').trim();
+                    problemasMecanicaHTML += `<div class="small-text"><strong>${itemNome}:</strong> ${dados.problemas.join(', ')}</div>`;
+                    if (dados.observacoes) {
+                        problemasMecanicaHTML += `<div class="small-text text-muted">Obs: ${dados.observacoes}</div>`;
+                    }
+                }
+            });
+        }
+
+        container.innerHTML = `
+            <div class="linha">
+                <span class="section-title">Correia / Sistema</span><br>
+                <strong>${reg.codigo || '-'}</strong> · ${reg.nomeCorreia || '-'}<br>
+                Sistema: <strong>${reg.sistema || '-'}</strong> · Tipo: ${reg.tipoEquipamento || '-'}
+            </div>
+            <div class="linha small-text">
+                Capacidade nominal: <strong>${reg.capacidadeNominal || '-'}</strong> t/h ·
+                Capacidade projetada: <strong>${reg.capacidadeProjetada || '-'}</strong> t/h
+            </div>
+            <div class="linha small-text">
+                Data inspeção: <strong>${reg.dataInspecao || '-'}</strong> ·
+                Responsável: <strong>${reg.responsavelInspecao || '-'}</strong> ·
+                Turno: <strong>${reg.turno || '-'}</strong>
+            </div>
+            ${blocoPeriodo}
+
+            <div class="section-title">Condições Críticas - MECÂNICA</div>
+            <div class="linha small-text">
+                Roletes/Tambores: <strong>${reg.condicaoRoletes || '-'}</strong> ·
+                Alinhamento: <strong>${reg.condicaoAlinhamento || '-'}</strong> ·
+                Emendas: <strong>${reg.condicaoEmendas || '-'}</strong><br>
+                Raspadores: <strong>${reg.condicaoRaspadores || '-'}</strong> ·
+                Vedação de chutes: <strong>${reg.condicaoVedacao || '-'}</strong>
+            </div>
+            ${problemasMecanicaHTML ? `<div class="linha small-text">${problemasMecanicaHTML}</div>` : ''}
+
+            <div class="section-title">Condições Preventivas - ELÉTRICAS</div>
+            <div class="linha small-text">
+                Lubrificação: <strong>${reg.condicaoLubrificacao || '-'}</strong> ·
+                Motor: <strong>${reg.condicaoMotor || '-'}</strong> ·
+                Raspadores Sec.: <strong>${reg.condicaoRaspadoresSec || '-'}</strong><br>
+                Retorno limpo: <strong>${reg.condicaoRetorno || '-'}</strong> ·
+                Roletes de impacto: <strong>${reg.condicaoRoletesImpacto || '-'}</strong>
+            </div>
+
+            <div class="section-title">Melhorias & Observações</div>
+            <div class="linha small-text">
+                Parte Operacional: <strong>${reg.condicaoOperacional || '-'}</strong> ·
+                Ambiental: <strong>${reg.condicaoAmbiental || '-'}</strong>
+            </div>
+
+            <div class="section-title">Diagnóstico e Soluções</div>
+            <div class="linha small-text">
+                <strong>Diagnóstico Técnico:</strong><br>
+                ${reg.diagnostico || '-'}
+            </div>
+            <div class="linha small-text">
+                <strong>Soluções Recomendadas:</strong><br>
+                ${reg.solucoes || '-'}
+            </div>
+
+            <div class="section-title">Observações Gerais</div>
+            <div class="linha small-text">
+                ${reg.observacoes || '-'}
+            </div>
+
+            <div class="section-title">Fotos (amostra reduzida)</div>
+        `;
+
+        const fotos = lerFotosBase64DoRegistro(reg);
+        const divFotos = document.createElement('div');
+        divFotos.id = 'relatorioFotos';
+        fotos.slice(0, 4).forEach(b64 => {
+            const img = document.createElement('img');
+            img.src = b64;
+            divFotos.appendChild(img);
+        });
+
+        container.appendChild(divFotos);
+    }
+
+    async function gerarPDFRelatorio(id) {
+        const reg = registros.find(r => r.id === id);
+        if (!reg) {
+            alert('Selecione uma correia válida para gerar o PDF.');
+            return;
+        }
+        const conteudo = document.getElementById('relatorioPreview');
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+
+        const canvas = await html2canvas(conteudo, { scale: 2 });
+        const imgData = canvas.toDataURL('image/png');
+
+        const pdfWidth = doc.internal.pageSize.getWidth();
+        const imgProps = doc.getImageProperties(imgData);
+        const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+        doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+
+        const dashElem = document.getElementById('dashConteudo');
+        if (dashElem) {
+            const canvasDash = await html2canvas(dashElem, { scale: 2 });
+            const imgDash = canvasDash.toDataURL('image/png');
+            const dashProps = doc.getImageProperties(imgDash);
+            const dashHeight = (dashProps.height * pdfWidth) / dashProps.width;
+
+            doc.addPage();
+            doc.addImage(imgDash, 'PNG', 0, 0, pdfWidth, dashHeight);
+        }
+
+        doc.save(`Relatorio_Correia_${reg.codigo || reg.id}.pdf`);
+    }
+
+    // ===== QR CODE =====
+    function gerarQRCodeParaRegistro(id) {
+        const reg = registros.find(r => r.id === id);
+        const box = document.getElementById('qrcodeBox');
+        if (!box) return;
+
+        box.innerHTML = '';
+
+        if (!reg) {
+            box.innerHTML = '<span class="small-text text-muted">Selecione uma correia.</span>';
+            return;
+        }
+
+        const payload = `CORREIA|${reg.id}`;
+        const div = document.createElement('div');
+        box.appendChild(div);
+
+        new QRCode(div, {
+            text: payload,
+            width: 200,
+            height: 200
+        });
+    }
+
+    function baixarQRCodePNG() {
+        const box = document.getElementById('qrcodeBox');
+        if (!box) return;
+        const img = box.querySelector('img');
+        if (!img) {
+            alert('Gere primeiro o QR Code.');
+            return;
+        }
+        const a = document.createElement('a');
+        a.href = img.src;
+        a.download = 'correia_qrcode.png';
+        a.click();
+    }
+
+    function iniciarLeitorQR() {
+        const readerEl = document.getElementById('reader');
+        if (!readerEl) return;
+        
+        if (html5QrScanner) {
+            return;
+        }
+
+        html5QrScanner = new Html5Qrcode('reader');
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+        html5QrScanner.start(
+            { facingMode: 'environment' },
+            config,
+            (decodedText, decodedResult) => {
+                const scanResult = document.getElementById('scanResult');
+                if (scanResult) {
+                    scanResult.innerText = decodedText;
+                }
+
+                if (decodedText.startsWith('CORREIA|')) {
+                    const id = decodedText.split('|')[1];
+                    const reg = registros.find(r => r.id === id);
+                    if (reg) {
+                        carregarRegistroNoFormulario(id);
+                        alert(`Correia ${reg.codigo || ''} carregada a partir do QR Code.`);
+                    } else {
+                        alert('ID de correia não encontrado no banco local. Importar backup se for outro aparelho.');
+                    }
+                }
+            },
+            errorMessage => {
+                // silencioso
+            }
+        ).catch(err => {
+            console.error('Erro ao iniciar câmera', err);
+            const scanResult = document.getElementById('scanResult');
+            if (scanResult) {
+                scanResult.innerText = 'Erro ao acessar a câmera. Verifique permissões / HTTPS.';
+            }
+        });
+    }
+
+    function pararLeitorQR() {
+        if (html5QrScanner) {
+            html5QrScanner.stop().then(() => {
+                html5QrScanner.clear();
+                html5QrScanner = null;
+            }).catch(err => console.error(err));
+        }
+    }
+
+    // ===== FOTOS (BASE64) =====
+    function handleFotosInput(event) {
+        const files = Array.from(event.target.files || []);
+        const preview = document.getElementById('previewFotos');
+        if (!preview) return;
+
+        preview.innerHTML = '';
+
+        const maxFotos = 4;
+        const selecionados = files.slice(0, maxFotos);
+
+        selecionados.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const img = document.createElement('img');
+                img.className = 'foto-preview';
+                img.src = e.target.result;
+                img.dataset.base64 = e.target.result;
+                preview.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // ===== INICIALIZAÇÃO E EVENTOS =====
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Carrega dados (prioriza nuvem quando configurado)
+        const cloudOk = initCloud();
+        if (cloudOk) {
+            const remote = await cloudLoadState();
+            if (remote && (Array.isArray(remote.registros) || Array.isArray(remote.sugestoes))) {
+                registros = Array.isArray(remote.registros) ? remote.registros : [];
+                sugestoes = Array.isArray(remote.sugestoes) ? remote.sugestoes : [];
+                // garante offline também
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                        version: remote.version || 2,
+                        updatedAt: remote.updatedAtIso || new Date().toISOString(),
+                        registros,
+                        sugestoes
+                    }));
+                } catch(e){}
+            } else {
+                carregarDoLocalStorage();
+            }
+
+            // Realtime: qualquer celular/PC vê mudanças quase instantaneamente
+            startCloudRealtimeSync(() => {
+                atualizarContadorRegistros();
+                preencherTabelaRegistros();
+                atualizarDashboards();
+                atualizarSelectsRelatorioEQR();
+                preencherTabelaSugestoes();
+            });
+        } else {
+            carregarDoLocalStorage();
+        }
+
+        atualizarContadorRegistros();
+        preencherTabelaRegistros();
+        atualizarDashboards();
+        atualizarSelectsRelatorioEQR();
+        preencherTabelaSugestoes();
+        
+        // Configurar eventos das novas caixas
+        configurarEventosCondicoes();
+
+        // Eventos cadastro
+        const sistemaSelect = document.getElementById('sistema');
+        const codigoSelect = document.getElementById('codigoCorreia');
+        
+        if (sistemaSelect) {
+            sistemaSelect.addEventListener('change', preencherCodigoCorreiaOptions);
+        }
+        
+        if (codigoSelect) {
+            codigoSelect.addEventListener('change', aoSelecionarCodigoCorreia);
+        }
+
+        const btnNovo = document.getElementById('btnNovo');
+        const btnLimpar = document.getElementById('btnLimpar');
+        const btnSalvar = document.getElementById('btnSalvar');
+        
+        if (btnNovo) btnNovo.addEventListener('click', limparFormulario);
+        if (btnLimpar) btnLimpar.addEventListener('click', limparFormulario);
+        if (btnSalvar) btnSalvar.addEventListener('click', salvarRegistro);
+
+        const fotosInput = document.getElementById('fotosCorreiaInput');
+        if (fotosInput) {
+            fotosInput.addEventListener('change', handleFotosInput);
+        }
+
+        // Filtros / Banco
+        const btnAplicarFiltros = document.getElementById('btnAplicarFiltros');
+        const btnLimparFiltros = document.getElementById('btnLimparFiltros');
+        
+        if (btnAplicarFiltros) {
+            btnAplicarFiltros.addEventListener('click', preencherTabelaRegistros);
+        }
+        
+        if (btnLimparFiltros) {
+            btnLimparFiltros.addEventListener('click', () => {
+                const filtroSistema = document.getElementById('filtroSistema');
+                const filtroCodigo = document.getElementById('filtroCodigo');
+                const filtroStatus = document.getElementById('filtroStatus');
+                const filtroTipo = document.getElementById('filtroTipo');
+                
+                if (filtroSistema) filtroSistema.value = '';
+                if (filtroCodigo) filtroCodigo.value = '';
+                if (filtroStatus) filtroStatus.value = '';
+                if (filtroTipo) filtroTipo.value = '';
+                preencherTabelaRegistros();
+            });
+        }
+
+        const btnExportarBackup = document.getElementById('btnExportarBackup');
+        const btnExportarBackupExcel = document.getElementById('btnExportarBackupExcel');
+        const btnApagarTudo = document.getElementById('btnApagarTudo');
+        
+        if (btnExportarBackup) {
+            btnExportarBackup.addEventListener('click', exportarBackup);
+        }
+        
+        if (btnExportarBackupExcel) {
+            btnExportarBackupExcel.addEventListener('click', exportarBackupExcelMacro);
+        }
+        
+        if (btnApagarTudo) {
+            btnApagarTudo.addEventListener('click', () => {
+                if (!confirm('Tem certeza que deseja apagar TODOS os registros?')) return;
+                registros = [];
+                sugestoes = [];
+                salvarNoLocalStorage();
+                atualizarContadorRegistros();
+                preencherTabelaRegistros();
+                atualizarDashboards();
+                atualizarSelectsRelatorioEQR();
+                preencherTabelaSugestoes();
+            });
+        }
+
+        const btnImportarBackup = document.getElementById('btnImportarBackup');
+        const backupFileInput = document.getElementById('backupFileInput');
+        
+        if (btnImportarBackup) {
+            btnImportarBackup.addEventListener('click', () => {
+                if (backupFileInput) backupFileInput.click();
+            });
+        }
+        
+        if (backupFileInput) {
+            backupFileInput.addEventListener('change', e => {
+                const file = e.target.files[0];
+                if (file) importarBackupArquivo(file);
+                e.target.value = '';
+            });
+        }
+
+        // Eventos tabela (delegação)
+        const tabelaRegistros = document.querySelector('#tabelaRegistros tbody');
+        if (tabelaRegistros) {
+            tabelaRegistros.addEventListener('click', e => {
+                const btn = e.target.closest('button');
+                if (!btn) return;
+                const id = btn.dataset.id;
+                if (!id) return;
+
+                if (btn.classList.contains('btn-editar')) {
+                    carregarRegistroNoFormulario(id);
+                } else if (btn.classList.contains('btn-excluir')) {
+                    if (!confirm('Excluir este registro?')) return;
+                    registros = registros.filter(r => r.id !== id);
+                    salvarNoLocalStorage();
+                    atualizarContadorRegistros();
+                    preencherTabelaRegistros();
+                    atualizarDashboards();
+                    atualizarSelectsRelatorioEQR();
+                } else if (btn.classList.contains('btn-relatorio')) {
+                    const relatorioSelect = document.getElementById('relatorioCorreiaSelect');
+                    if (relatorioSelect) {
+                        relatorioSelect.value = id;
+                        montarPreviewRelatorio(id);
+                        const tab = new bootstrap.Tab(document.querySelector('button[data-bs-target="#relatorio"]'));
+                        tab.show();
+                    }
+                } else if (btn.classList.contains('btn-qr')) {
+                    const qrSelect = document.getElementById('qrCorreiaSelect');
+                    if (qrSelect) {
+                        qrSelect.value = id;
+                        gerarQRCodeParaRegistro(id);
+                        const tab = new bootstrap.Tab(document.querySelector('button[data-bs-target="#qrcode"]'));
+                        tab.show();
+                    }
+                }
+            });
+        }
+
+        // Eventos tabela sugestões
+        const tabelaSugestoes = document.querySelector('#tabelaSugestoes tbody');
+        if (tabelaSugestoes) {
+            tabelaSugestoes.addEventListener('click', e => {
+                const btn = e.target.closest('button');
+                if (!btn) return;
+                const id = btn.dataset.id;
+                if (!id) return;
+
+                if (btn.classList.contains('btn-excluir-sugestao')) {
+                    if (!confirm('Excluir esta sugestão?')) return;
+                    sugestoes = sugestoes.filter(s => s.id !== id);
+                    salvarNoLocalStorage();
+                    preencherTabelaSugestoes();
+                }
+            });
+        }
+
+        // Simulador
+        const btnCalcular = document.getElementById('btnCalcular');
+        if (btnCalcular) {
+            btnCalcular.addEventListener('click', calcularSimulador);
+        }
+
+        // Relatório
+        const btnAtualizarPreview = document.getElementById('btnAtualizarPreview');
+        const btnGerarPDF = document.getElementById('btnGerarPDF');
+        
+        if (btnAtualizarPreview) {
+            btnAtualizarPreview.addEventListener('click', () => {
+                const id = document.getElementById('relatorioCorreiaSelect') ? document.getElementById('relatorioCorreiaSelect').value : '';
+                if (!id) {
+                    alert('Selecione uma correia.');
+                    return;
+                }
+                montarPreviewRelatorio(id);
+            });
+        }
+        
+        if (btnGerarPDF) {
+            btnGerarPDF.addEventListener('click', () => {
+                const id = document.getElementById('relatorioCorreiaSelect') ? document.getElementById('relatorioCorreiaSelect').value : '';
+                if (!id) {
+                    alert('Selecione uma correia.');
+                    return;
+                }
+                gerarPDFRelatorio(id);
+            });
+        }
+
+        // QR Code
+        const qrCorreiaSelect = document.getElementById('qrCorreiaSelect');
+        const btnBaixarQR = document.getElementById('btnBaixarQR');
+        
+        if (qrCorreiaSelect) {
+            qrCorreiaSelect.addEventListener('change', e => {
+                const id = e.target.value;
+                if (!id) return;
+                gerarQRCodeParaRegistro(id);
+            });
+        }
+        
+        if (btnBaixarQR) {
+            btnBaixarQR.addEventListener('click', baixarQRCodePNG);
+        }
+
+        // Leitor QR
+        const qrTabBtn = document.querySelector('button[data-bs-target="#qrcode"]');
+        const btnPararLeitura = document.getElementById('btnPararLeitura');
+        
+        if (qrTabBtn) {
+            qrTabBtn.addEventListener('shown.bs.tab', iniciarLeitorQR);
+            qrTabBtn.addEventListener('hidden.bs.tab', pararLeitorQR);
+        }
+        
+        if (btnPararLeitura) {
+            btnPararLeitura.addEventListener('click', pararLeitorQR);
+        }
+
+        // Sugestões
+        const btnRegistrarSugestao = document.getElementById('btnRegistrarSugestao');
+        if (btnRegistrarSugestao) {
+            btnRegistrarSugestao.addEventListener('click', registrarSugestao);
+        }
+    });
+</script>
+
+</body>
+</html>
