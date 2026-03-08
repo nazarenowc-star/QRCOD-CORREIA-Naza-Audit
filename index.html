@@ -3377,6 +3377,64 @@
         }
     });
 </script>
-
+<!-- SENSOR NAZA PORTAL v2 -->
+<script>
+(function() {
+    const SISTEMA_ID = 'correia';
+    const FIREBASE_URL = 'https://firestore.googleapis.com/v1/projects/naza-auditoria-hub/databases/(default)/documents/sensores/' + SISTEMA_ID;
+    
+    function coletarDados() {
+        const texto = document.body.innerText;
+        const numeros = texto.match(/\d+\.?\d*/g) || [];
+        let valores = numeros.slice(0, 3).map(n => parseFloat(n));
+        
+        if (valores.length < 3) {
+            const equipamentos = document.querySelectorAll('.equip, .correia, tr').length;
+            const operacional = document.querySelectorAll('.ok, .running').length;
+            const manutencao = document.querySelectorAll('.maint, .warning').length;
+            const critico = document.querySelectorAll('.critical, .error').length;
+            valores = [
+                Math.min(100, (operacional / Math.max(1, equipamentos)) * 100) || 76,  // % operacional
+                Math.min(100, (manutencao / Math.max(1, equipamentos)) * 100) || 15,  // % manutenção
+                Math.min(100, (critico / Math.max(1, equipamentos)) * 100) || 9   // % crítico
+            ];
+        }
+        
+        return valores;
+    }
+    
+    function enviar() {
+        const valores = coletarDados();
+        fetch(FIREBASE_URL, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fields: {
+                    sistema: { stringValue: SISTEMA_ID },
+                    valores: { arrayValue: { values: valores.map(v => ({ doubleValue: v })) } },
+                    timestamp: { timestampValue: new Date().toISOString() }
+                }
+            })
+        }).then(() => console.log('✅ Sensor Correia:', valores))
+        .catch(() => {});
+        
+        fetch('https://firestore.googleapis.com/v1/projects/naza-auditoria-hub/databases/(default)/documents/sensor_logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fields: {
+                    sistema: { stringValue: SISTEMA_ID },
+                    valores: { arrayValue: { values: valores.map(v => ({ doubleValue: v })) } },
+                    timestamp: { timestampValue: new Date().toISOString() }
+                }
+            })
+        }).catch(() => {});
+    }
+    
+    setInterval(enviar, 30000);
+    enviar();
+    console.log('🟣 Sensor Correia ativo');
+})();
+</script>
 </body>
 </html>
