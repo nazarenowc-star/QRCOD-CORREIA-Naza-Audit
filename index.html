@@ -27,6 +27,11 @@
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
+    <!-- Firebase (CORRETO - apenas uma vez) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
     <style>
         body {
             background-color: #f4f6f8;
@@ -140,10 +145,6 @@
             min-height: 60px;
         }
     </style>
-
-    <!-- Firebase (para salvar tudo na nuvem - Firestore) -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
 </head>
 
@@ -1459,18 +1460,16 @@
     const STORAGE_KEY = 'correias_qrcode_db_v2';
 
     // ===== FIREBASE / NUVEM (Firestore) =====
-    // 1) Crie um projeto no Firebase, habilite Firestore e cole aqui a configuração do seu app Web.
-    // 2) Se você deixar projectId vazio, o app continua 100% offline (localStorage) como está hoje.
     const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyBQoo7fENe2mk_qmy20AE5eEwfEKs-ZKeY",
-  authDomain: "qrcode-correia-naza-audit.firebaseapp.com",
-  projectId: "qrcode-correia-naza-audit",
-  storageBucket: "qrcode-correia-naza-audit.firebasestorage.app",
-  messagingSenderId: "857708812761",
-  appId: "1:857708812761:web:0576b1c029c8599851e1c8"
-};
+        apiKey: "AIzaSyBQoo7fENe2mk_qmy20AE5eEwfEKs-ZKeY",
+        authDomain: "qrcode-correia-naza-audit.firebaseapp.com",
+        projectId: "qrcode-correia-naza-audit",
+        storageBucket: "qrcode-correia-naza-audit.firebasestorage.app",
+        messagingSenderId: "857708812761",
+        appId: "1:857708812761:web:0576b1c029c8599851e1c8"
+    };
 
-    // Nome único do "banco" deste app no Firestore (um documento só, simples e rápido)
+    // Nome único do "banco" deste app no Firestore
     const FIRESTORE_DOC_PATH = { collection: "apps", doc: "correias_qrcode_db_v2" };
 
     let cloud = {
@@ -1488,9 +1487,6 @@
             if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
             cloud.db = firebase.firestore();
             cloud.enabled = true;
-
-            // Reduz latência em redes ruins e permite modo offline do Firestore
-            // (O Firestore já faz cache automaticamente no navegador moderno.)
             return true;
         } catch (e) {
             console.warn("Cloud desativada (erro ao iniciar Firebase):", e);
@@ -1516,9 +1512,8 @@
 
     function scheduleCloudSave(pacote) {
         if (!cloud.enabled || !cloud.db) return;
-        if (cloud.applyingRemote) return; // evita loop quando estamos aplicando mudança vinda da nuvem
+        if (cloud.applyingRemote) return;
 
-        // debounce: evita salvar a cada tecla/clique em sequência
         clearTimeout(cloud.saveTimer);
         cloud.saveTimer = setTimeout(async () => {
             try {
@@ -1548,17 +1543,14 @@
                 const remoteIso = d.updatedAtIso || null;
                 if (!remoteIso) return;
 
-                // Ignora se já estamos na mesma versão do remoto
                 if (cloud.lastRemoteUpdatedAtIso && remoteIso === cloud.lastRemoteUpdatedAtIso) return;
 
-                // Aplica remoto
                 cloud.applyingRemote = true;
                 cloud.lastRemoteUpdatedAtIso = remoteIso;
 
                 registros = Array.isArray(d.registros) ? d.registros : [];
                 sugestoes = Array.isArray(d.sugestoes) ? d.sugestoes : [];
 
-                // Atualiza offline também (sem re-subir imediatamente)
                 try {
                     const pacoteLocal = { version: 2, updatedAt: remoteIso, registros, sugestoes };
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(pacoteLocal));
@@ -1574,8 +1566,8 @@
         }
     }
 
-    let registros = []; // array de correias
-    let sugestoes = []; // sugestões / melhorias dos facilitadores
+    let registros = [];
+    let sugestoes = [];
     let charts = {
         statusChart: null,
         sistemaChart: null,
@@ -1585,7 +1577,6 @@
     };
     let html5QrScanner = null;
 
-    // Mapa dos sistemas do simulador para o cadastro
     const systemsData = {
         "Fazendão": {
             equipments: [
@@ -1644,7 +1635,6 @@
         }
     };
 
-    // Mapa de rótulos do select para a key de systemsData
     const SYSTEM_MAP = {
         "Sul 1": "Alegria Sul 1",
         "Sul 2": "Alegria Sul 2",
@@ -1666,7 +1656,6 @@
     }
 
     function getStatusCritico(reg) {
-        // Verificar condições críticas (MECÂNICA)
         const criticos = ['condicaoRoletes', 'condicaoAlinhamento', 'condicaoEmendas', 'condicaoRaspadores', 'condicaoVedacao'];
         let temNaoOkCritico = false;
         criticos.forEach(c => {
@@ -1674,7 +1663,6 @@
         });
         if (temNaoOkCritico) return 'CRITICO';
 
-        // Verificar condições preventivas (ELÉTRICAS)
         const preventivas = ['condicaoLubrificacao', 'condicaoMotor', 'condicaoRaspadoresSec', 'condicaoRetorno', 'condicaoRoletesImpacto'];
         let temNaoOkPrev = false;
         preventivas.forEach(c => {
@@ -1682,7 +1670,6 @@
         });
         if (temNaoOkPrev) return 'ATENCAO';
 
-        // Verificar melhorias & observações
         const melhorias = ['condicaoOperacional', 'condicaoAmbiental'];
         let temNaoOkMel = false;
         melhorias.forEach(c => {
@@ -1707,16 +1694,13 @@
         return cNom + ' / ' + cProj + ' t/h';
     }
 
-    // ===== FUNÇÕES PARA AS NOVAS CAIXAS DINÂMICAS =====
     function configurarEventosCondicoes() {
-        // Eventos para condições mecânicas
         document.querySelectorAll('.condicao-mecanica').forEach(select => {
             select.addEventListener('change', function() {
                 const containerId = this.id.replace('condicao', 'problemas');
                 const container = document.getElementById(containerId);
                 if (container) {
                     container.style.display = this.value === 'NÃO OK' ? 'block' : 'none';
-                    // Limpar seleções quando ocultar
                     if (this.value !== 'NÃO OK') {
                         const problemasSelect = container.querySelector('.problemas-mecanica');
                         const obsTextarea = container.querySelector('.obs-mecanica');
@@ -1729,14 +1713,12 @@
             });
         });
 
-        // Eventos para condições elétricas
         document.querySelectorAll('.condicao-eletrica').forEach(select => {
             select.addEventListener('change', function() {
                 const containerId = this.id.replace('condicao', 'problemas');
                 const container = document.getElementById(containerId);
                 if (container) {
                     container.style.display = this.value === 'NÃO OK' ? 'block' : 'none';
-                    // Limpar seleções quando ocultar
                     if (this.value !== 'NÃO OK') {
                         const problemasSelect = container.querySelector('.problemas-eletrica');
                         const obsTextarea = container.querySelector('.obs-eletrica');
@@ -1749,7 +1731,6 @@
             });
         });
 
-        // Eventos para Melhorias & Observações
         const operacionalSelect = document.getElementById('condicaoOperacional');
         const ambientalSelect = document.getElementById('condicaoAmbiental');
         
@@ -1788,7 +1769,6 @@
         }
     }
 
-    // ===== SUGESTÕES / MELHORIAS – ANÁLISE AUTOMÁTICA =====
     function analisarTextoSugestaoSimples(texto) {
         const t = (texto || '').toLowerCase();
         const tags = [];
@@ -1892,7 +1872,6 @@
             return;
         }
 
-        // Ordenar por prioridade (ALTA primeiro) e depois por data
         sugestoes.sort((a, b) => {
             const prioridadeOrder = { 'ALTA': 1, 'MÉDIA': 2, 'BAIXA': 3 };
             if (prioridadeOrder[a.prioridade] !== prioridadeOrder[b.prioridade]) {
@@ -1930,7 +1909,6 @@
         return reg.fotosBase64 || [];
     }
 
-    // ===== LOCALSTORAGE =====
     function carregarDoLocalStorage() {
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
@@ -1941,7 +1919,6 @@
             }
             const parsed = JSON.parse(raw);
 
-            // Compatibilidade com versões antigas
             if (Array.isArray(parsed)) {
                 registros = parsed;
                 sugestoes = [];
@@ -1954,7 +1931,7 @@
                 if (Array.isArray(parsed.sugestoes)) {
                     sugestoes = parsed.sugestoes;
                 } else if (Array.isArray(parsed.sugestoesIA)) {
-                    sugestoes = parsed.sugestoesIA; // Compatibilidade com versão anterior
+                    sugestoes = parsed.sugestoesIA;
                 } else {
                     sugestoes = [];
                 }
@@ -1986,13 +1963,11 @@
         }
     }
 
-    // ===== FORM / CADASTRO =====
     function limparFormulario() {
         document.getElementById('inspecaoForm').reset();
         document.getElementById('registroId').value = '';
         document.getElementById('previewFotos').innerHTML = '';
         
-        // Limpar todas as caixas de problemas
         document.querySelectorAll('.problema-container').forEach(container => {
             container.style.display = 'none';
             const select = container.querySelector('select');
@@ -2069,7 +2044,6 @@
             });
         }
 
-        // Coletar problemas mecânicos
         const problemasMecanica = {};
         document.querySelectorAll('.condicao-mecanica').forEach(select => {
             if (select.value === 'NÃO OK') {
@@ -2091,7 +2065,6 @@
             }
         });
 
-        // Coletar problemas elétricos
         const problemasEletrica = {};
         document.querySelectorAll('.condicao-eletrica').forEach(select => {
             if (select.value === 'NÃO OK') {
@@ -2113,7 +2086,6 @@
             }
         });
 
-        // Coletar problemas operacionais e ambientais
         let problemasOperacional = null;
         let problemasAmbiental = null;
         
@@ -2157,31 +2129,26 @@
             responsavelInspecao: get('responsavelInspecao'),
             turno: get('turno'),
 
-            // Condições Mecânicas
             condicaoRoletes: get('condicaoRoletes'),
             condicaoAlinhamento: get('condicaoAlinhamento'),
             condicaoEmendas: get('condicaoEmendas'),
             condicaoRaspadores: get('condicaoRaspadores'),
             condicaoVedacao: get('condicaoVedacao'),
 
-            // Condições Elétricas
             condicaoLubrificacao: get('condicaoLubrificacao'),
             condicaoMotor: get('condicaoMotor'),
             condicaoRaspadoresSec: get('condicaoRaspadoresSec'),
             condicaoRetorno: get('condicaoRetorno'),
             condicaoRoletesImpacto: get('condicaoRoletesImpacto'),
 
-            // Melhorias & Observações
             condicaoOperacional: get('condicaoOperacional'),
             condicaoAmbiental: get('condicaoAmbiental'),
 
-            // Problemas detalhados
             problemasMecanica: problemasMecanica,
             problemasEletrica: problemasEletrica,
             problemasOperacional: problemasOperacional,
             problemasAmbiental: problemasAmbiental,
 
-            // Outros campos
             diagnostico: get('diagnostico'),
             solucoes: get('solucoes'),
             observacoes: get('observacoes'),
@@ -2189,24 +2156,20 @@
             fotosBase64
         };
 
-        // Gerar lista consolidada de problemas para o dashboard
         const todosProblemas = [];
         
-        // Adicionar problemas mecânicos
         Object.values(problemasMecanica).forEach(item => {
             if (item.problemas && item.problemas.length > 0) {
                 todosProblemas.push(...item.problemas);
             }
         });
         
-        // Adicionar problemas elétricos
         Object.values(problemasEletrica).forEach(item => {
             if (item.problemas && item.problemas.length > 0) {
                 todosProblemas.push(...item.problemas);
             }
         });
         
-        // Adicionar problemas operacionais e ambientais
         if (problemasOperacional && problemasOperacional.problemas) {
             todosProblemas.push(...problemasOperacional.problemas);
         }
@@ -2259,9 +2222,7 @@
         document.getElementById('registroId').value = reg.id;
         set('sistema', reg.sistema);
 
-        // Preencher opções de código baseado no sistema
         preencherCodigoCorreiaOptions();
-        // Aguardar um momento para garantir que as opções foram carregadas
         setTimeout(() => {
             set('codigoCorreia', reg.codigo);
         }, 100);
@@ -2274,25 +2235,21 @@
         set('responsavelInspecao', reg.responsavelInspecao);
         set('turno', reg.turno);
 
-        // Restaurar condições mecânicas
         set('condicaoRoletes', reg.condicaoRoletes);
         set('condicaoAlinhamento', reg.condicaoAlinhamento);
         set('condicaoEmendas', reg.condicaoEmendas);
         set('condicaoRaspadores', reg.condicaoRaspadores);
         set('condicaoVedacao', reg.condicaoVedacao);
 
-        // Restaurar condições elétricas
         set('condicaoLubrificacao', reg.condicaoLubrificacao);
         set('condicaoMotor', reg.condicaoMotor);
         set('condicaoRaspadoresSec', reg.condicaoRaspadoresSec);
         set('condicaoRetorno', reg.condicaoRetorno);
         set('condicaoRoletesImpacto', reg.condicaoRoletesImpacto);
 
-        // Restaurar melhorias & observações
         set('condicaoOperacional', reg.condicaoOperacional);
         set('condicaoAmbiental', reg.condicaoAmbiental);
 
-        // Restaurar problemas mecânicos
         if (reg.problemasMecanica) {
             Object.keys(reg.problemasMecanica).forEach(key => {
                 const select = document.getElementById(key);
@@ -2320,7 +2277,6 @@
             });
         }
 
-        // Restaurar problemas elétricos
         if (reg.problemasEletrica) {
             Object.keys(reg.problemasEletrica).forEach(key => {
                 const select = document.getElementById(key);
@@ -2348,7 +2304,6 @@
             });
         }
 
-        // Restaurar problemas operacionais
         if (reg.condicaoOperacional === 'NÃO OK' && reg.problemasOperacional) {
             const container = document.getElementById('problemasOperacional');
             if (container) {
@@ -2368,7 +2323,6 @@
             }
         }
 
-        // Restaurar problemas ambientais
         if (reg.condicaoAmbiental === 'NÃO OK' && reg.problemasAmbiental) {
             const container = document.getElementById('problemasAmbiental');
             if (container) {
@@ -2388,12 +2342,10 @@
             }
         }
 
-        // Restaurar outros campos
         set('diagnostico', reg.diagnostico);
         set('solucoes', reg.solucoes);
         set('observacoes', reg.observacoes);
 
-        // Restaurar fotos
         const preview = document.getElementById('previewFotos');
         if (preview) {
             preview.innerHTML = '';
@@ -2406,12 +2358,10 @@
             });
         }
 
-        // Mudar para a aba de cadastro
         const tab = new bootstrap.Tab(document.querySelector('button[data-bs-target="#cadastro"]'));
         tab.show();
     }
 
-    // ===== TABELA / BANCO =====
     function aplicarFiltros() {
         const s = document.getElementById('filtroSistema') ? document.getElementById('filtroSistema').value : '';
         const cod = document.getElementById('filtroCodigo') ? document.getElementById('filtroCodigo').value.toLowerCase() : '';
@@ -2475,7 +2425,6 @@
         });
     }
 
-    // ===== BACKUP / EXPORTAÇÃO =====
     function exportarBackup() {
         const pacote = {
             version: 2,
@@ -2589,7 +2538,7 @@
                 } else {
                     if (Array.isArray(parsed.registros)) novosReg = parsed.registros;
                     if (Array.isArray(parsed.sugestoes)) novasSug = parsed.sugestoes;
-                    else if (Array.isArray(parsed.sugestoesIA)) novasSug = parsed.sugestoesIA; // Compatibilidade
+                    else if (Array.isArray(parsed.sugestoesIA)) novasSug = parsed.sugestoesIA;
                 }
 
                 if (!Array.isArray(novosReg)) novosReg = [];
@@ -2632,7 +2581,6 @@
         reader.readAsText(arquivo, 'utf-8');
     }
 
-    // ===== DASHBOARDS =====
     function atualizarDashboards() {
         const total = registros.length;
         const criticos = registros.filter(r => r.statusCritico === 'CRITICO').length;
@@ -2650,7 +2598,6 @@
         if (kpiAtencao) kpiAtencao.innerText = atencao;
         if (kpiNormais) kpiNormais.innerText = normal;
 
-        // Status Chart
         const ctxStatus = document.getElementById('statusChart');
         if (ctxStatus) {
             if (charts.statusChart) charts.statusChart.destroy();
@@ -2673,7 +2620,6 @@
             });
         }
 
-        // Sistema Chart
         const porSistema = {};
         registros.forEach(r => {
             if (!r.sistema) return;
@@ -2695,7 +2641,6 @@
             });
         }
 
-        // Problemas (Pareto)
         const contProblemas = {};
         registros.forEach(r => {
             (r.problemasIdentificados || []).forEach(p => {
@@ -2729,7 +2674,6 @@
             });
         }
 
-        // Capacidade por Sistema
         const capPorSistema = {};
         registros.forEach(r => {
             const c = parseFloat(r.capacidadeNominal) || 0;
@@ -2758,7 +2702,6 @@
             });
         }
 
-        // Inspeções por Responsável / Turno
         const mapaRespTurno = {};
         registros.forEach(r => {
             const resp = (r.responsavelInspecao || 'Não informado').trim();
@@ -2796,7 +2739,6 @@
         }
     }
 
-    // ===== SIMULADOR (GARGALO POR SISTEMA) =====
     function calcularSimulador() {
         const selecionados = [];
         if (document.getElementById('checkSul1') && document.getElementById('checkSul1').checked) selecionados.push('Sul 1');
@@ -2828,7 +2770,6 @@
         if (prodMesEl) prodMesEl.innerText = mes.toLocaleString('pt-BR');
     }
 
-    // ===== RELATÓRIO PDF =====
     function atualizarSelectsRelatorioEQR() {
         const relSel = document.getElementById('relatorioCorreiaSelect');
         const qrSel = document.getElementById('qrCorreiaSelect');
@@ -2884,7 +2825,6 @@
             </div>`;
         }
 
-        // Construir lista de problemas mecânicos
         let problemasMecanicaHTML = '';
         if (reg.problemasMecanica) {
             Object.entries(reg.problemasMecanica).forEach(([key, dados]) => {
@@ -3004,7 +2944,6 @@
         doc.save(`Relatorio_Correia_${reg.codigo || reg.id}.pdf`);
     }
 
-    // ===== QR CODE =====
     function gerarQRCodeParaRegistro(id) {
         const reg = registros.find(r => r.id === id);
         const box = document.getElementById('qrcodeBox');
@@ -3094,7 +3033,6 @@
         }
     }
 
-    // ===== FOTOS (BASE64) =====
     function handleFotosInput(event) {
         const files = Array.from(event.target.files || []);
         const preview = document.getElementById('previewFotos');
@@ -3118,16 +3056,13 @@
         });
     }
 
-    // ===== INICIALIZAÇÃO E EVENTOS =====
     document.addEventListener('DOMContentLoaded', async () => {
-        // Carrega dados (prioriza nuvem quando configurado)
         const cloudOk = initCloud();
         if (cloudOk) {
             const remote = await cloudLoadState();
             if (remote && (Array.isArray(remote.registros) || Array.isArray(remote.sugestoes))) {
                 registros = Array.isArray(remote.registros) ? remote.registros : [];
                 sugestoes = Array.isArray(remote.sugestoes) ? remote.sugestoes : [];
-                // garante offline também
                 try {
                     localStorage.setItem(STORAGE_KEY, JSON.stringify({
                         version: remote.version || 2,
@@ -3140,7 +3075,6 @@
                 carregarDoLocalStorage();
             }
 
-            // Realtime: qualquer celular/PC vê mudanças quase instantaneamente
             startCloudRealtimeSync(() => {
                 atualizarContadorRegistros();
                 preencherTabelaRegistros();
@@ -3158,10 +3092,8 @@
         atualizarSelectsRelatorioEQR();
         preencherTabelaSugestoes();
         
-        // Configurar eventos das novas caixas
         configurarEventosCondicoes();
 
-        // Eventos cadastro
         const sistemaSelect = document.getElementById('sistema');
         const codigoSelect = document.getElementById('codigoCorreia');
         
@@ -3186,7 +3118,6 @@
             fotosInput.addEventListener('change', handleFotosInput);
         }
 
-        // Filtros / Banco
         const btnAplicarFiltros = document.getElementById('btnAplicarFiltros');
         const btnLimparFiltros = document.getElementById('btnLimparFiltros');
         
@@ -3252,7 +3183,6 @@
             });
         }
 
-        // Eventos tabela (delegação)
         const tabelaRegistros = document.querySelector('#tabelaRegistros tbody');
         if (tabelaRegistros) {
             tabelaRegistros.addEventListener('click', e => {
@@ -3291,7 +3221,6 @@
             });
         }
 
-        // Eventos tabela sugestões
         const tabelaSugestoes = document.querySelector('#tabelaSugestoes tbody');
         if (tabelaSugestoes) {
             tabelaSugestoes.addEventListener('click', e => {
@@ -3309,13 +3238,11 @@
             });
         }
 
-        // Simulador
         const btnCalcular = document.getElementById('btnCalcular');
         if (btnCalcular) {
             btnCalcular.addEventListener('click', calcularSimulador);
         }
 
-        // Relatório
         const btnAtualizarPreview = document.getElementById('btnAtualizarPreview');
         const btnGerarPDF = document.getElementById('btnGerarPDF');
         
@@ -3341,7 +3268,6 @@
             });
         }
 
-        // QR Code
         const qrCorreiaSelect = document.getElementById('qrCorreiaSelect');
         const btnBaixarQR = document.getElementById('btnBaixarQR');
         
@@ -3357,7 +3283,6 @@
             btnBaixarQR.addEventListener('click', baixarQRCodePNG);
         }
 
-        // Leitor QR
         const qrTabBtn = document.querySelector('button[data-bs-target="#qrcode"]');
         const btnPararLeitura = document.getElementById('btnPararLeitura');
         
@@ -3370,25 +3295,75 @@
             btnPararLeitura.addEventListener('click', pararLeitorQR);
         }
 
-        // Sugestões
         const btnRegistrarSugestao = document.getElementById('btnRegistrarSugestao');
         if (btnRegistrarSugestao) {
             btnRegistrarSugestao.addEventListener('click', registrarSugestao);
         }
     });
 </script>
-<!-- SENSOR NAZA PORTAL - CORREIAS -->
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+<!-- SENSOR NAZA PORTAL - CORREIAS (CORRIGIDO - usa Firebase já carregado) -->
 <script>
 (function(){
-  const firebaseConfig={apiKey:"AIzaSyDneReMjO78JqJ-LvmSTiQqUMkxT97H6JE",authDomain:"naza-auditoria-hub.firebaseapp.com",databaseURL:"https://naza-auditoria-hub-default-rtdb.firebaseio.com",projectId:"naza-auditoria-hub"};
-  const app=firebase.apps.length?firebase.app():firebase.initializeApp(firebaseConfig);
-  const db=app.database(); const SISTEMA_ID='correia';
-  const num=(id)=>{const el=document.getElementById(id); if(!el) return 0; const m=(el.textContent||'').replace(/\./g,'').replace(',','.').match(/-?\d+(?:\.\d+)?/); return m?Number(m[0]):0;};
-  function coletar(){ const total=num('kpiTotalCorreias'), crit=num('kpiCriticas'), at=num('kpiAtencao'), norm=num('kpiNormais'); const gauge=total>0?(norm/total*100):0; return {sistema:SISTEMA_ID,valores:[gauge,total,crit],dadosCompletos:{total,criticas:crit,atencao:at,normais:norm},timestamp:Date.now()}; }
-  function enviar(){const payload=coletar(); db.ref('sensores/'+SISTEMA_ID).set(payload).then(()=>console.log('🟢 Sensor Correias ativo',payload));}
-  setTimeout(enviar,4000); setInterval(enviar,30000);
+    // Usar a mesma versão do Firebase já carregada
+    const firebaseConfig = {
+        apiKey: "AIzaSyDneReMjO78JqJ-LvmSTiQqUMkxT97H6JE",
+        authDomain: "naza-auditoria-hub.firebaseapp.com",
+        databaseURL: "https://naza-auditoria-hub-default-rtdb.firebaseio.com",
+        projectId: "naza-auditoria-hub"
+    };
+    
+    // Verificar se já existe uma app inicializada
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    } else {
+        // Se já existe, usa a configuração existente ou adiciona essa como secundária
+        try {
+            firebase.app(); // tenta pegar a default
+        } catch(e) {
+            firebase.initializeApp(firebaseConfig, "naza-sensor");
+        }
+    }
+    
+    // Usar o Firebase Database (agora disponível)
+    const db = firebase.database();
+    const SISTEMA_ID = 'correia';
+    
+    const num = (id) => {
+        const el = document.getElementById(id); 
+        if(!el) return 0; 
+        const m = (el.textContent||'').replace(/\./g,'').replace(',','.').match(/-?\d+(?:\.\d+)?/); 
+        return m ? Number(m[0]) : 0;
+    };
+    
+    function coletar() { 
+        const total = num('kpiTotalCorreias'), 
+              crit = num('kpiCriticas'), 
+              at = num('kpiAtencao'), 
+              norm = num('kpiNormais'); 
+        const gauge = total > 0 ? (norm/total * 100) : 0; 
+        return {
+            sistema: SISTEMA_ID,
+            valores: [gauge, total, crit],
+            dadosCompletos: {
+                total,
+                criticas: crit,
+                atencao: at,
+                normais: norm
+            },
+            timestamp: Date.now()
+        }; 
+    }
+    
+    function enviar() {
+        const payload = coletar(); 
+        db.ref('sensores/' + SISTEMA_ID).set(payload)
+            .then(() => console.log('🟢 Sensor Correias ativo', payload))
+            .catch(err => console.warn('Sensor erro:', err));
+    }
+    
+    setTimeout(enviar, 4000); 
+    setInterval(enviar, 30000);
 })();
 </script>
 </body>
