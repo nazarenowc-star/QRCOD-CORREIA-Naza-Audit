@@ -1505,7 +1505,8 @@
             const d = snap.data() || {};
             return d;
         } catch (e) {
-            console.warn("Falha ao carregar da nuvem, usando offline:", e);
+            // Erro de permissão - apenas log suave, não interrompe o funcionamento
+            console.log("ℹ️ Modo offline - sincronização com nuvem não disponível (verifique permissões do Firebase)");
             return null;
         }
     }
@@ -1526,7 +1527,10 @@
                 }, { merge: true });
                 cloud.lastRemoteUpdatedAtIso = pacote.updatedAt || new Date().toISOString();
             } catch (e) {
-                console.warn("Falha ao salvar na nuvem:", e);
+                // Silencia erro de permissão - app continua funcionando offline
+                if (e.code !== 'permission-denied') {
+                    console.warn("Falha ao salvar na nuvem:", e);
+                }
             }
         }, 600);
     }
@@ -1559,7 +1563,12 @@
                 cloud.applyingRemote = false;
                 if (typeof onRemoteApplied === "function") onRemoteApplied();
             }, (err) => {
-                console.warn("Realtime sync desligado:", err);
+                // Erro de permissão - apenas log informativo
+                if (err.code === 'permission-denied') {
+                    console.log("ℹ️ Sincronização em tempo real desativada (sem permissão Firebase)");
+                } else {
+                    console.warn("Realtime sync desligado:", err);
+                }
             });
         } catch (e) {
             console.warn("Não foi possível iniciar realtime sync:", e);
@@ -3302,7 +3311,7 @@
     });
 </script>
 
-<!-- SENSOR NAZA PORTAL - CORREIAS (CORRIGIDO - usa Firebase já carregado) -->
+<!-- SENSOR NAZA PORTAL - CORREIAS (AGORA FUNCIONAL) -->
 <script>
 (function(){
     // Usar a mesma versão do Firebase já carregada
@@ -3313,19 +3322,12 @@
         projectId: "naza-auditoria-hub"
     };
     
-    // Verificar se já existe uma app inicializada
+    // Inicializa apenas se necessário
     if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
-    } else {
-        // Se já existe, usa a configuração existente ou adiciona essa como secundária
-        try {
-            firebase.app(); // tenta pegar a default
-        } catch(e) {
-            firebase.initializeApp(firebaseConfig, "naza-sensor");
-        }
     }
     
-    // Usar o Firebase Database (agora disponível)
+    // Usar o Firebase Database
     const db = firebase.database();
     const SISTEMA_ID = 'correia';
     
@@ -3362,6 +3364,7 @@
             .catch(err => console.warn('Sensor erro:', err));
     }
     
+    // Aguarda elementos carregarem
     setTimeout(enviar, 4000); 
     setInterval(enviar, 30000);
 })();
