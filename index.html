@@ -27,9 +27,9 @@
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-    <!-- Firebase (APENAS Firestore - projeto antigo) -->
+    <!-- Firebase (CORRETO - usando Realtime Database do projeto HUB) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
     <style>
         body {
@@ -142,7 +142,6 @@
             font-size: 0.85rem;
             min-height: 60px;
         }
-        /* Status de conexão */
         .connection-status {
             position: fixed;
             top: 10px;
@@ -167,7 +166,6 @@
 </head>
 <body>
 
-<!-- Status de Conexão -->
 <div id="connectionStatus" class="connection-status offline">
     <i class="fas fa-wifi"></i> <span id="connectionText">Offline</span>
 </div>
@@ -178,7 +176,7 @@
             <i class="fas fa-conveyor-belt"></i> Gestão de Correias Transportadoras
         </span>
         <span class="badge bg-light text-primary small-text">
-            Firestore · Correias + Sistemas · QR Code
+            Realtime Database · Correias + Sistemas · QR Code
         </span>
     </div>
 </nav>
@@ -188,8 +186,6 @@
 </div>
 
 <div class="container-fluid mt-3">
-
-    <!-- Abas -->
     <ul class="nav nav-tabs" id="mainTabs" role="tablist">
         <li class="nav-item">
             <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#cadastro">
@@ -252,7 +248,6 @@
                 <div class="row g-3">
                     <!-- COLUNA 1 -->
                     <div class="col-lg-6">
-                        <!-- Dados do Sistema -->
                         <div class="card">
                             <div class="card-header bg-primary text-white">
                                 Dados do Sistema & Correia
@@ -1453,18 +1448,19 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    // ===== CONFIGURAÇÃO FIREBASE (projeto antigo - correto) =====
+    // ===== CONFIGURAÇÃO FIREBASE (CORRETA - projeto HUB) =====
     const FIREBASE_CONFIG = {
-        apiKey: "AIzaSyBQoo7fENe2mk_qmy20AE5eEwfEKs-ZKeY",
-        authDomain: "qrcode-correia-naza-audit.firebaseapp.com",
-        projectId: "qrcode-correia-naza-audit",
-        storageBucket: "qrcode-correia-naza-audit.firebasestorage.app",
-        messagingSenderId: "857708812761",
-        appId: "1:857708812761:web:0576b1c029c8599851e1c8"
+        apiKey: "AIzaSyDneReMjO78JqJ-LvmSTiQqUMkxT97H6JE",
+        authDomain: "naza-auditoria-hub.firebaseapp.com",
+        databaseURL: "https://naza-auditoria-hub-default-rtdb.firebaseio.com",
+        projectId: "naza-auditoria-hub",
+        storageBucket: "naza-auditoria-hub.firebasestorage.app",
+        messagingSenderId: "1014107842497",
+        appId: "1:1014107842497:web:3338a5438f018df972f140"
     };
 
     const STORAGE_KEY = 'correias_qrcode_db_v2';
-    const FIRESTORE_DOC_PATH = { collection: "apps", doc: "correias_qrcode_db_v2" };
+    const DB_PATH = 'correias_sistema'; // Caminho no Realtime Database
 
     // ===== VARIÁVEIS GLOBAIS =====
     let registros = [];
@@ -1620,10 +1616,10 @@
             if (!firebase.apps.length) {
                 firebase.initializeApp(FIREBASE_CONFIG);
             }
-            db = firebase.firestore();
+            db = firebase.database();
             isOnline = true;
             atualizarStatusConexao(true);
-            console.log('✅ Firebase conectado - Projeto:', FIREBASE_CONFIG.projectId);
+            console.log('✅ Firebase conectado - Projeto HUB');
             return true;
         } catch (e) {
             console.warn('⚠️ Firebase offline:', e);
@@ -1633,72 +1629,55 @@
         }
     }
 
-    async function loadFromFirestore() {
+    async function loadFromFirebase() {
         if (!db) return null;
         try {
-            const docRef = db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc);
-            const snap = await docRef.get();
-            if (snap.exists) {
-                const data = snap.data();
-                console.log('📥 Dados carregados do Firestore');
-                return data;
-            }
-            return null;
+            const snapshot = await db.ref(DB_PATH).once('value');
+            const data = snapshot.val();
+            console.log('📥 Dados carregados do Realtime Database');
+            return data;
         } catch (e) {
-            console.log('ℹ️ Modo offline - não foi possível carregar do Firestore');
+            console.log('ℹ️ Modo offline - não foi possível carregar');
             return null;
         }
     }
 
-    function saveToFirestore(pacote) {
+    function saveToFirebase(pacote) {
         if (!db || !isOnline) return;
 
-        // Debounce para não salvar muitas vezes
         if (syncTimer) clearTimeout(syncTimer);
         
-        syncTimer = setTimeout(async () => {
-            try {
-                const docRef = db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc);
-                await docRef.set(pacote, { merge: true });
-                console.log('☁️ Sincronizado com Firestore');
-            } catch (e) {
-                console.warn('❌ Erro ao sincronizar:', e);
-            }
+        syncTimer = setTimeout(() => {
+            db.ref(DB_PATH).set(pacote)
+                .then(() => console.log('☁️ Sincronizado com Realtime Database'))
+                .catch(err => console.warn('❌ Erro ao sincronizar:', err));
         }, 1000);
     }
 
-    function startFirestoreSync() {
+    function startFirebaseSync() {
         if (!db) return;
 
-        db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc)
-            .onSnapshot((snapshot) => {
-                if (!snapshot.exists) return;
-                
-                const data = snapshot.data();
-                if (!data) return;
+        db.ref(DB_PATH).on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (!data) return;
 
-                // Evita loop de atualização
-                if (JSON.stringify(data.registros) !== JSON.stringify(registros) ||
-                    JSON.stringify(data.sugestoes) !== JSON.stringify(sugestoes)) {
-                    
-                    registros = data.registros || [];
-                    sugestoes = data.sugestoes || [];
-                    
-                    // Atualiza localStorage
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-                    
-                    // Atualiza UI
-                    atualizarContadorRegistros();
-                    preencherTabelaRegistros();
-                    atualizarDashboards();
-                    atualizarSelectsRelatorioEQR();
-                    preencherTabelaSugestoes();
-                    
-                    console.log('🔄 Dados sincronizados da nuvem');
-                }
-            }, (error) => {
-                console.log('ℹ️ Sincronização em tempo real indisponível');
-            });
+            if (JSON.stringify(data.registros) !== JSON.stringify(registros) ||
+                JSON.stringify(data.sugestoes) !== JSON.stringify(sugestoes)) {
+                
+                registros = data.registros || [];
+                sugestoes = data.sugestoes || [];
+                
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                
+                atualizarContadorRegistros();
+                preencherTabelaRegistros();
+                atualizarDashboards();
+                atualizarSelectsRelatorioEQR();
+                preencherTabelaSugestoes();
+                
+                console.log('🔄 Dados sincronizados da nuvem');
+            }
+        });
     }
 
     // ===== LOCAL STORAGE =====
@@ -1711,17 +1690,8 @@
                 return;
             }
             const parsed = JSON.parse(raw);
-
-            if (Array.isArray(parsed)) {
-                registros = parsed;
-                sugestoes = [];
-            } else if (parsed && typeof parsed === 'object') {
-                registros = Array.isArray(parsed.registros) ? parsed.registros : [];
-                sugestoes = Array.isArray(parsed.sugestoes) ? parsed.sugestoes : [];
-            } else {
-                registros = [];
-                sugestoes = [];
-            }
+            registros = parsed.registros || [];
+            sugestoes = parsed.sugestoes || [];
         } catch (e) {
             console.error('Erro ao carregar do localStorage', e);
             registros = [];
@@ -1740,12 +1710,34 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(pacote));
             mostrarIndicadorSalvando();
             
-            // Tenta sincronizar com Firestore
-            saveToFirestore(pacote);
+            saveToFirebase(pacote);
+            
+            // Envia sensor para o dashboard
+            enviarSensorParaDashboard();
         } catch (e) {
             alert('Erro ao salvar dados. Verifique o espaço disponível.');
             console.error('Erro ao salvar', e);
         }
+    }
+
+    // ===== SENSOR PARA DASHBOARD =====
+    function enviarSensorParaDashboard() {
+        if (!db || !isOnline) return;
+        
+        const total = registros.length;
+        const criticas = registros.filter(r => r.statusCritico === 'CRITICO').length;
+        const atencao = registros.filter(r => r.statusCritico === 'ATENCAO').length;
+        const normais = registros.filter(r => r.statusCritico === 'NORMAL').length;
+        
+        const payload = {
+            sistema: 'correia',
+            valores: [total, criticas, normais],
+            dadosCompletos: { total, criticas, atencao, normais },
+            timestamp: Date.now()
+        };
+        
+        db.ref('sensores/correia').set(payload)
+            .catch(err => console.warn('Sensor erro:', err));
     }
 
     // ===== FUNÇÕES DO FORMULÁRIO =====
@@ -2083,7 +2075,6 @@
 
         document.getElementById('registroId').value = reg.id;
         set('sistema', reg.sistema);
-
         preencherCodigoCorreiaOptions();
         setTimeout(() => {
             set('codigoCorreia', reg.codigo);
@@ -2400,7 +2391,6 @@
                 } else {
                     if (Array.isArray(parsed.registros)) novosReg = parsed.registros;
                     if (Array.isArray(parsed.sugestoes)) novasSug = parsed.sugestoes;
-                    else if (Array.isArray(parsed.sugestoesIA)) novasSug = parsed.sugestoesIA;
                 }
 
                 if (!Array.isArray(novosReg)) novosReg = [];
@@ -2871,9 +2861,7 @@
                     }
                 }
             },
-            errorMessage => {
-                // silencioso
-            }
+            errorMessage => {}
         ).catch(err => {
             console.error('Erro ao iniciar câmera', err);
             const scanResult = document.getElementById('scanResult');
@@ -3051,40 +3039,30 @@
         });
     }
 
-    // ===== SENSOR PARA DASHBOARD =====
-    function enviarSensorParaDashboard() {
-        // Função vazia - mantida para compatibilidade
-        // O sensor foi removido para evitar conflitos
-    }
-
     // ===== INICIALIZAÇÃO =====
     document.addEventListener('DOMContentLoaded', async () => {
-        // Inicializa Firebase
         initFirebase();
 
-        // Tenta carregar do Firestore primeiro
-        const remoteData = await loadFromFirestore();
+        const remoteData = await loadFromFirebase();
         if (remoteData && (remoteData.registros || remoteData.sugestoes)) {
             registros = remoteData.registros || [];
             sugestoes = remoteData.sugestoes || [];
-            // Salva no localStorage como backup
             localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteData));
         } else {
-            // Se não conseguir, carrega do localStorage
             carregarDoLocalStorage();
+            if (registros.length > 0 || sugestoes.length > 0) {
+                saveToFirebase({ registros, sugestoes });
+            }
         }
 
-        // Inicia sincronização em tempo real
-        startFirestoreSync();
+        startFirebaseSync();
 
-        // Atualiza UI
         atualizarContadorRegistros();
         preencherTabelaRegistros();
         atualizarDashboards();
         atualizarSelectsRelatorioEQR();
         preencherTabelaSugestoes();
         
-        // Configura eventos
         configurarEventosCondicoes();
 
         const sistemaSelect = document.getElementById('sistema');
@@ -3098,7 +3076,6 @@
             codigoSelect.addEventListener('change', aoSelecionarCodigoCorreia);
         }
 
-        // Botões
         const btnNovo = document.getElementById('btnNovo');
         const btnLimpar = document.getElementById('btnLimpar');
         const btnSalvar = document.getElementById('btnSalvar');
@@ -3293,6 +3270,9 @@
         if (btnRegistrarSugestao) {
             btnRegistrarSugestao.addEventListener('click', registrarSugestao);
         }
+
+        // Envia sensor a cada 30 segundos
+        setInterval(enviarSensorParaDashboard, 30000);
     });
 </script>
 </body>
