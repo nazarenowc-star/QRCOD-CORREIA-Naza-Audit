@@ -27,10 +27,9 @@
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-    <!-- Firebase (CORRETO - apenas uma vez) -->
+    <!-- Firebase (APENAS Firestore - projeto antigo) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
     <style>
         body {
@@ -99,7 +98,6 @@
         .bg-purple {
             background-color: #6f42c1 !important;
         }
-        /* Área do relatório PDF */
         #relatorioPreview {
             background: #ffffff;
             border: 1px solid #dee2e6;
@@ -144,20 +142,43 @@
             font-size: 0.85rem;
             min-height: 60px;
         }
+        /* Status de conexão */
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 9999;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .connection-status.online {
+            background-color: #d1e7dd;
+            color: #0f5132;
+            border: 1px solid #badbcc;
+        }
+        .connection-status.offline {
+            background-color: #f8d7da;
+            color: #842029;
+            border: 1px solid #f5c2c7;
+        }
     </style>
-
 </head>
-
 <body>
+
+<!-- Status de Conexão -->
+<div id="connectionStatus" class="connection-status offline">
+    <i class="fas fa-wifi"></i> <span id="connectionText">Offline</span>
+</div>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container-fluid">
         <span class="navbar-brand">
             <i class="fas fa-conveyor-belt"></i> Gestão de Correias Transportadoras
         </span>
-
         <span class="badge bg-light text-primary small-text">
-            Dados salvos localmente (offline) · Correias + Sistemas · QR Code
+            Firestore · Correias + Sistemas · QR Code
         </span>
     </div>
 </nav>
@@ -170,64 +191,53 @@
 
     <!-- Abas -->
     <ul class="nav nav-tabs" id="mainTabs" role="tablist">
-
         <li class="nav-item">
             <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#cadastro">
                 <i class="fas fa-clipboard-list"></i> Cadastro / Inspeção (Correias)
             </button>
         </li>
-
         <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#banco">
                 <i class="fas fa-database"></i> Banco de Dados & Filtros
             </button>
         </li>
-
         <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#sugestoes">
                 <i class="fas fa-lightbulb"></i> Sugestões & Melhorias
             </button>
         </li>
-
         <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dash">
                 <i class="fas fa-chart-line"></i> Dashboards & KPIs
             </button>
         </li>
-
         <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#fluxogramas">
                 <i class="fas fa-project-diagram"></i> Fluxogramas dos Sistemas
             </button>
         </li>
-
         <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#simulador">
                 <i class="fas fa-calculator"></i> Simulador de Massas
             </button>
         </li>
-
         <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#relatorio">
                 <i class="fas fa-file-pdf"></i> Relatório PDF (Correia)
             </button>
         </li>
-
         <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#qrcode">
                 <i class="fas fa-qrcode"></i> QR Code – Correias & Sistemas
             </button>
         </li>
-
     </ul>
 
     <div class="tab-content">
-
         <!-- CADASTRO / INSPEÇÃO CORREIAS -->
         <div class="tab-pane fade show active" id="cadastro">
             <form id="inspecaoForm" class="mt-3">
                 <input type="hidden" id="registroId">
-
                 <div class="d-flex justify-content-between mb-2">
                     <div>
                         <button type="button" class="btn btn-outline-secondary btn-sm" id="btnNovo">
@@ -264,13 +274,11 @@
                                     <label class="form-label">Código da Correia *</label>
                                     <select id="codigoCorreia" class="form-select" required>
                                         <option value="">Selecione</option>
-                                        <!-- Opções serão preenchidas via JavaScript -->
                                     </select>
                                 </div>
                                 <div class="mb-2">
                                     <label class="form-label">Nome/Local da Correia</label>
-                                    <input type="text" id="nomeCorreia" class="form-control"
-                                           placeholder="Ex: Correia descarga do britador">
+                                    <input type="text" id="nomeCorreia" class="form-control" placeholder="Ex: Correia descarga do britador">
                                 </div>
                                 <div class="mb-2">
                                     <label class="form-label">Tipo de Equipamento</label>
@@ -448,6 +456,7 @@
                                         </div>
                                     </div>
                                 </div>
+
                                 <!-- Lubrificação -->
                                 <div class="mb-3 border-bottom pb-3">
                                     <label class="form-label">Lubrificação</label>
@@ -542,8 +551,6 @@
                                         </div>
                                     </div>
                                 </div>
-
-
                             </div>
                         </div>
                     </div>
@@ -580,7 +587,6 @@
                                         </div>
                                     </div>
                                 </div>
-
 
                                 <!-- Proteções de Campo (Sensores) -->
                                 <div class="mb-3 border-bottom pb-3">
@@ -748,12 +754,10 @@
                                         </div>
                                     </div>
                                 </div>
-
                             </div>
                         </div>
 
-
-<!-- OPERAÇÃO -->
+                        <!-- OPERAÇÃO -->
                         <div class="card">
                             <div class="card-header bg-success text-white">
                                 OPERAÇÃO
@@ -827,7 +831,6 @@
                                     <label class="form-label">Soluções Recomendadas</label>
                                     <textarea id="solucoes" class="form-control" rows="2"></textarea>
                                 </div>
-
                                 <div class="row">
                                     <div class="col-md-6 mb-2">
                                         <label class="form-label d-block">Fotos da Correia</label>
@@ -842,7 +845,6 @@
                                         <div id="previewFotos" class="d-flex flex-wrap gap-2 mt-2"></div>
                                     </div>
                                 </div>
-
                                 <div class="mb-2">
                                     <label class="form-label">Observações Gerais</label>
                                     <textarea id="observacoes" class="form-control" rows="2"></textarea>
@@ -865,10 +867,7 @@
                         </button>
                     </div>
                 </div>
-
-                <!-- Input de arquivo para importar backup JSON -->
                 <input type="file" id="backupFileInput" accept="application/json,.json" class="d-none">
-
             </form>
         </div>
 
@@ -983,7 +982,6 @@
             </div>
         </div>
 
-        
         <!-- SUGESTÕES & MELHORIAS -->
         <div class="tab-pane fade" id="sugestoes">
             <div class="mt-3">
@@ -1066,7 +1064,7 @@
             </div>
         </div>
 
-<!-- DASHBOARDS -->
+        <!-- DASHBOARDS -->
         <div class="tab-pane fade" id="dash">
             <div class="mt-3" id="dashConteudo">
                 <div class="row g-3">
@@ -1256,7 +1254,7 @@
             </div>
         </div>
 
-        <!-- SIMULADOR DE MASSAS (versão compacta baseada no gargalo) -->
+        <!-- SIMULADOR DE MASSAS -->
         <div class="tab-pane fade" id="simulador">
             <div class="mt-3">
                 <div class="card">
@@ -1386,7 +1384,7 @@
             </div>
         </div>
 
-        <!-- QR CODE – CORREIAS & SISTEMAS -->
+        <!-- QR CODE -->
         <div class="tab-pane fade" id="qrcode">
             <div class="mt-3">
                 <div class="row g-3">
@@ -1448,7 +1446,6 @@
                 </div>
             </div>
         </div>
-
     </div>
 </div>
 
@@ -1456,10 +1453,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    // ===== CHAVES E ESTRUTURAS BÁSICAS =====
-    const STORAGE_KEY = 'correias_qrcode_db_v2';
-
-    // ===== FIREBASE / NUVEM (Firestore) =====
+    // ===== CONFIGURAÇÃO FIREBASE (projeto antigo - correto) =====
     const FIREBASE_CONFIG = {
         apiKey: "AIzaSyBQoo7fENe2mk_qmy20AE5eEwfEKs-ZKeY",
         authDomain: "qrcode-correia-naza-audit.firebaseapp.com",
@@ -1469,112 +1463,10 @@
         appId: "1:857708812761:web:0576b1c029c8599851e1c8"
     };
 
-    // Nome único do "banco" deste app no Firestore
+    const STORAGE_KEY = 'correias_qrcode_db_v2';
     const FIRESTORE_DOC_PATH = { collection: "apps", doc: "correias_qrcode_db_v2" };
 
-    let cloud = {
-        enabled: false,
-        db: null,
-        unsub: null,
-        lastRemoteUpdatedAtIso: null,
-        applyingRemote: false,
-        saveTimer: null
-    };
-
-    function initCloud() {
-        try {
-            if (!window.firebase || !FIREBASE_CONFIG || !FIREBASE_CONFIG.projectId) return false;
-            if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-            cloud.db = firebase.firestore();
-            cloud.enabled = true;
-            return true;
-        } catch (e) {
-            console.warn("Cloud desativada (erro ao iniciar Firebase):", e);
-            cloud.enabled = false;
-            cloud.db = null;
-            return false;
-        }
-    }
-
-    async function cloudLoadState() {
-        if (!cloud.enabled || !cloud.db) return null;
-        try {
-            const ref = cloud.db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc);
-            const snap = await ref.get();
-            if (!snap.exists) return null;
-            const d = snap.data() || {};
-            return d;
-        } catch (e) {
-            // Erro de permissão - apenas log suave, não interrompe o funcionamento
-            console.log("ℹ️ Modo offline - sincronização com nuvem não disponível (verifique permissões do Firebase)");
-            return null;
-        }
-    }
-
-    function scheduleCloudSave(pacote) {
-        if (!cloud.enabled || !cloud.db) return;
-        if (cloud.applyingRemote) return;
-
-        clearTimeout(cloud.saveTimer);
-        cloud.saveTimer = setTimeout(async () => {
-            try {
-                const ref = cloud.db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc);
-                await ref.set({
-                    version: pacote.version || 2,
-                    updatedAtIso: pacote.updatedAt || new Date().toISOString(),
-                    registros: Array.isArray(pacote.registros) ? pacote.registros : [],
-                    sugestoes: Array.isArray(pacote.sugestoes) ? pacote.sugestoes : []
-                }, { merge: true });
-                cloud.lastRemoteUpdatedAtIso = pacote.updatedAt || new Date().toISOString();
-            } catch (e) {
-                // Silencia erro de permissão - app continua funcionando offline
-                if (e.code !== 'permission-denied') {
-                    console.warn("Falha ao salvar na nuvem:", e);
-                }
-            }
-        }, 600);
-    }
-
-    function startCloudRealtimeSync(onRemoteApplied) {
-        if (!cloud.enabled || !cloud.db) return;
-        try {
-            const ref = cloud.db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc);
-
-            if (cloud.unsub) cloud.unsub();
-            cloud.unsub = ref.onSnapshot((snap) => {
-                if (!snap.exists) return;
-                const d = snap.data() || {};
-                const remoteIso = d.updatedAtIso || null;
-                if (!remoteIso) return;
-
-                if (cloud.lastRemoteUpdatedAtIso && remoteIso === cloud.lastRemoteUpdatedAtIso) return;
-
-                cloud.applyingRemote = true;
-                cloud.lastRemoteUpdatedAtIso = remoteIso;
-
-                registros = Array.isArray(d.registros) ? d.registros : [];
-                sugestoes = Array.isArray(d.sugestoes) ? d.sugestoes : [];
-
-                try {
-                    const pacoteLocal = { version: 2, updatedAt: remoteIso, registros, sugestoes };
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(pacoteLocal));
-                } catch (e) {}
-
-                cloud.applyingRemote = false;
-                if (typeof onRemoteApplied === "function") onRemoteApplied();
-            }, (err) => {
-                // Erro de permissão - apenas log informativo
-                if (err.code === 'permission-denied') {
-                    console.log("ℹ️ Sincronização em tempo real desativada (sem permissão Firebase)");
-                } else {
-                    console.warn("Realtime sync desligado:", err);
-                }
-            });
-        } catch (e) {
-            console.warn("Não foi possível iniciar realtime sync:", e);
-        }
-    }
-
+    // ===== VARIÁVEIS GLOBAIS =====
     let registros = [];
     let sugestoes = [];
     let charts = {
@@ -1585,7 +1477,11 @@
         respTurnoChart: null
     };
     let html5QrScanner = null;
+    let db = null;
+    let isOnline = false;
+    let syncTimer = null;
 
+    // ===== DADOS DOS SISTEMAS =====
     const systemsData = {
         "Fazendão": {
             equipments: [
@@ -1606,7 +1502,6 @@
                 { id: "centro_8", name: "Correias", nominal: 2500, code: "11CV39" , tipo: "Correia" },
                 { id: "centro_9", name: "Correias", nominal: 2500, code: "11CV40" , tipo: "Correia" },
                 { id: "centro_10", name: "Correias", nominal:2500, code: "11CV41" , tipo: "Correia" },
-
             ],
             gargalo: 1640
         },
@@ -1656,8 +1551,24 @@
     // ===== UTILITÁRIOS =====
     function mostrarIndicadorSalvando() {
         const el = document.getElementById('indicadorSalvando');
-        el.style.display = 'block';
-        setTimeout(() => { el.style.display = 'none'; }, 800);
+        if (el) {
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 800);
+        }
+    }
+
+    function atualizarStatusConexao(online) {
+        const statusEl = document.getElementById('connectionStatus');
+        const textEl = document.getElementById('connectionText');
+        if (!statusEl || !textEl) return;
+        
+        if (online) {
+            statusEl.className = 'connection-status online';
+            textEl.innerText = 'Online';
+        } else {
+            statusEl.className = 'connection-status offline';
+            textEl.innerText = 'Offline';
+        }
     }
 
     function gerarId() {
@@ -1703,6 +1614,141 @@
         return cNom + ' / ' + cProj + ' t/h';
     }
 
+    // ===== FIREBASE FUNCTIONS =====
+    function initFirebase() {
+        try {
+            if (!firebase.apps.length) {
+                firebase.initializeApp(FIREBASE_CONFIG);
+            }
+            db = firebase.firestore();
+            isOnline = true;
+            atualizarStatusConexao(true);
+            console.log('✅ Firebase conectado - Projeto:', FIREBASE_CONFIG.projectId);
+            return true;
+        } catch (e) {
+            console.warn('⚠️ Firebase offline:', e);
+            isOnline = false;
+            atualizarStatusConexao(false);
+            return false;
+        }
+    }
+
+    async function loadFromFirestore() {
+        if (!db) return null;
+        try {
+            const docRef = db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc);
+            const snap = await docRef.get();
+            if (snap.exists) {
+                const data = snap.data();
+                console.log('📥 Dados carregados do Firestore');
+                return data;
+            }
+            return null;
+        } catch (e) {
+            console.log('ℹ️ Modo offline - não foi possível carregar do Firestore');
+            return null;
+        }
+    }
+
+    function saveToFirestore(pacote) {
+        if (!db || !isOnline) return;
+
+        // Debounce para não salvar muitas vezes
+        if (syncTimer) clearTimeout(syncTimer);
+        
+        syncTimer = setTimeout(async () => {
+            try {
+                const docRef = db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc);
+                await docRef.set(pacote, { merge: true });
+                console.log('☁️ Sincronizado com Firestore');
+            } catch (e) {
+                console.warn('❌ Erro ao sincronizar:', e);
+            }
+        }, 1000);
+    }
+
+    function startFirestoreSync() {
+        if (!db) return;
+
+        db.collection(FIRESTORE_DOC_PATH.collection).doc(FIRESTORE_DOC_PATH.doc)
+            .onSnapshot((snapshot) => {
+                if (!snapshot.exists) return;
+                
+                const data = snapshot.data();
+                if (!data) return;
+
+                // Evita loop de atualização
+                if (JSON.stringify(data.registros) !== JSON.stringify(registros) ||
+                    JSON.stringify(data.sugestoes) !== JSON.stringify(sugestoes)) {
+                    
+                    registros = data.registros || [];
+                    sugestoes = data.sugestoes || [];
+                    
+                    // Atualiza localStorage
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                    
+                    // Atualiza UI
+                    atualizarContadorRegistros();
+                    preencherTabelaRegistros();
+                    atualizarDashboards();
+                    atualizarSelectsRelatorioEQR();
+                    preencherTabelaSugestoes();
+                    
+                    console.log('🔄 Dados sincronizados da nuvem');
+                }
+            }, (error) => {
+                console.log('ℹ️ Sincronização em tempo real indisponível');
+            });
+    }
+
+    // ===== LOCAL STORAGE =====
+    function carregarDoLocalStorage() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) {
+                registros = [];
+                sugestoes = [];
+                return;
+            }
+            const parsed = JSON.parse(raw);
+
+            if (Array.isArray(parsed)) {
+                registros = parsed;
+                sugestoes = [];
+            } else if (parsed && typeof parsed === 'object') {
+                registros = Array.isArray(parsed.registros) ? parsed.registros : [];
+                sugestoes = Array.isArray(parsed.sugestoes) ? parsed.sugestoes : [];
+            } else {
+                registros = [];
+                sugestoes = [];
+            }
+        } catch (e) {
+            console.error('Erro ao carregar do localStorage', e);
+            registros = [];
+            sugestoes = [];
+        }
+    }
+
+    function salvarNoLocalStorage() {
+        try {
+            const pacote = {
+                version: 2,
+                updatedAt: new Date().toISOString(),
+                registros,
+                sugestoes
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(pacote));
+            mostrarIndicadorSalvando();
+            
+            // Tenta sincronizar com Firestore
+            saveToFirestore(pacote);
+        } catch (e) {
+            alert('Erro ao salvar dados. Verifique o espaço disponível.');
+            console.error('Erro ao salvar', e);
+        }
+    }
+
+    // ===== FUNÇÕES DO FORMULÁRIO =====
     function configurarEventosCondicoes() {
         document.querySelectorAll('.condicao-mecanica').forEach(select => {
             select.addEventListener('change', function() {
@@ -1778,214 +1824,6 @@
         }
     }
 
-    function analisarTextoSugestaoSimples(texto) {
-        const t = (texto || '').toLowerCase();
-        const tags = [];
-
-        const addTag = (tag, palavras) => {
-            if (palavras.some(p => t.includes(p))) {
-                tags.push(tag);
-            }
-        };
-
-        addTag('SEGURANCA', ['segurança', 'seguranca', 'risco', 'acidente', 'epi', 'queda']);
-        addTag('LIMPEZA', ['limpeza', 'sujar', 'sujidade', 'material acumulado', 'acúmulo', 'acumulo']);
-        addTag('ROLETES', ['rolete', 'roletes']);
-        addTag('RASPADOR', ['raspador', 'raspadores']);
-        addTag('VEDACAO', ['vedação', 'vedacao']);
-        addTag('SENSOR', ['sensor', 'chave', 'intertravamento']);
-        addTag('TREINAMENTO', ['treinamento', 'capacitação', 'capacitacao', 'reciclagem']);
-        addTag('AMBIENTAL', ['poeira', 'pó', 'po', 'água', 'agua', 'lama', 'resíduo', 'residuo']);
-        addTag('SAP', ['sap', 'ordem', 'om ', 'os ']);
-        addTag('FLUXO_MATERIAL', ['nível alto', 'nivel alto', 'entupido', 'obstruído', 'obstruido', 'fluxo', 'retomada']);
-
-        let prioridade = 'MÉDIA';
-        if (
-            t.includes('parada') || t.includes('parou') ||
-            t.includes('travado') || t.includes('travou') ||
-            t.includes('falha') || t.includes('quebrado') ||
-            t.includes('risco') || t.includes('crítico') || t.includes('critico')
-        ) {
-            prioridade = 'ALTA';
-        } else if (
-            t.includes('sugestão') || t.includes('sugestao') ||
-            t.includes('melhoria') || t.includes('otimização') || t.includes('otimizacao')
-        ) {
-            prioridade = 'BAIXA';
-        }
-
-        const resumo = texto && texto.length > 140 ? texto.slice(0, 137) + '...' : (texto || '');
-
-        return { tags, prioridade, resumo };
-    }
-
-    function registrarSugestao() {
-        const dataCampo = document.getElementById('sugData');
-        const respCampo = document.getElementById('sugResponsavel');
-        const sisCampo = document.getElementById('sugSistema');
-        const codCampo = document.getElementById('sugCodigo');
-        const txtCampo = document.getElementById('sugTexto');
-
-        const texto = (txtCampo && txtCampo.value || '').trim();
-        if (!texto) {
-            alert('Descreva a sugestão / problema antes de registrar.');
-            if (txtCampo) txtCampo.focus();
-            return;
-        }
-
-        const analise = analisarTextoSugestaoSimples(texto);
-        const sug = {
-            id: 'SUG-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
-            data: (dataCampo && dataCampo.value) || new Date().toISOString().slice(0, 10),
-            responsavel: (respCampo && respCampo.value || '').trim(),
-            sistema: (sisCampo && sisCampo.value) || '',
-            codigo: (codCampo && codCampo.value || '').trim(),
-            texto,
-            prioridade: analise.prioridade,
-            tags: analise.tags,
-            resumo: analise.resumo
-        };
-
-        if (!Array.isArray(sugestoes)) sugestoes = [];
-        sugestoes.push(sug);
-        salvarNoLocalStorage();
-        preencherTabelaSugestoes();
-
-        const resEl = document.getElementById('sugResultado');
-        if (resEl) {
-            const cls =
-                analise.prioridade === 'ALTA' ? 'badge bg-danger' :
-                analise.prioridade === 'MÉDIA' ? 'badge bg-warning text-dark' :
-                'badge bg-success';
-            resEl.innerHTML =
-                '<strong>Análise automática:</strong> prioridade ' +
-                '<span class="' + cls + '">' + analise.prioridade + '</span>' +
-                (analise.tags.length
-                    ? ' · tags sugeridas: <span class="text-muted">' + analise.tags.join(', ') + '</span>'
-                    : ' · texto genérico, sem tags específicas.');
-        }
-
-        if (txtCampo) txtCampo.value = '';
-    }
-
-    function preencherTabelaSugestoes() {
-        const tbody = document.querySelector('#tabelaSugestoes tbody');
-        if (!tbody) return;
-
-        tbody.innerHTML = '';
-
-        if (!Array.isArray(sugestoes) || sugestoes.length === 0) {
-            const tr = document.createElement('tr');
-            tr.innerHTML = '<td colspan="7" class="text-center text-muted small-text">Nenhuma sugestão registrada até o momento.</td>';
-            tbody.appendChild(tr);
-            return;
-        }
-
-        sugestoes.sort((a, b) => {
-            const prioridadeOrder = { 'ALTA': 1, 'MÉDIA': 2, 'BAIXA': 3 };
-            if (prioridadeOrder[a.prioridade] !== prioridadeOrder[b.prioridade]) {
-                return prioridadeOrder[a.prioridade] - prioridadeOrder[b.prioridade];
-            }
-            return new Date(b.data) - new Date(a.data);
-        });
-
-        sugestoes.forEach(s => {
-            const tr = document.createElement('tr');
-            const prioridade = s.prioridade || 'MÉDIA';
-            const badgeClass =
-                prioridade === 'ALTA' ? 'badge bg-danger' :
-                prioridade === 'MÉDIA' ? 'badge bg-warning text-dark' :
-                'badge bg-success';
-
-            tr.innerHTML =
-                '<td>' + (s.data || '-') + '</td>' +
-                '<td>' + (s.sistema || '-') + '</td>' +
-                '<td>' + (s.codigo || '-') + '</td>' +
-                '<td><span class="' + badgeClass + '">' + prioridade + '</span></td>' +
-                '<td>' + (s.responsavel || '-') + '</td>' +
-                '<td class="small-text">' + ((s.tags || []).join(', ') || '-') + '</td>' +
-                '<td>' +
-                    '<button class="btn btn-sm btn-outline-danger btn-excluir-sugestao" data-id="' + s.id + '">' +
-                        '<i class="fa-solid fa-trash"></i>' +
-                    '</button>' +
-                '</td>';
-
-            tbody.appendChild(tr);
-        });
-    }
-
-    function lerFotosBase64DoRegistro(reg) {
-        return reg.fotosBase64 || [];
-    }
-
-    function carregarDoLocalStorage() {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) {
-                registros = [];
-                sugestoes = [];
-                return;
-            }
-            const parsed = JSON.parse(raw);
-
-            if (Array.isArray(parsed)) {
-                registros = parsed;
-                sugestoes = [];
-            } else if (parsed && typeof parsed === 'object') {
-                if (Array.isArray(parsed.registros)) {
-                    registros = parsed.registros;
-                } else {
-                    registros = [];
-                }
-                if (Array.isArray(parsed.sugestoes)) {
-                    sugestoes = parsed.sugestoes;
-                } else if (Array.isArray(parsed.sugestoesIA)) {
-                    sugestoes = parsed.sugestoesIA;
-                } else {
-                    sugestoes = [];
-                }
-            } else {
-                registros = [];
-                sugestoes = [];
-            }
-        } catch (e) {
-            console.error('Erro ao carregar do localStorage', e);
-            registros = [];
-            sugestoes = [];
-        }
-    }
-
-    function salvarNoLocalStorage() {
-        try {
-            const pacote = {
-                version: 2,
-                updatedAt: new Date().toISOString(),
-                registros,
-                sugestoes
-            };
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(pacote));
-            scheduleCloudSave(pacote);
-            mostrarIndicadorSalvando();
-        } catch (e) {
-            alert('Erro ao salvar dados. Verifique o espaço disponível.');
-            console.error('Erro ao salvar', e);
-        }
-    }
-
-    function limparFormulario() {
-        document.getElementById('inspecaoForm').reset();
-        document.getElementById('registroId').value = '';
-        document.getElementById('previewFotos').innerHTML = '';
-        
-        document.querySelectorAll('.problema-container').forEach(container => {
-            container.style.display = 'none';
-            const select = container.querySelector('select');
-            const textarea = container.querySelector('textarea');
-            if (select) Array.from(select.options).forEach(opt => opt.selected = false);
-            if (textarea) textarea.value = '';
-        });
-    }
-
     function preencherCodigoCorreiaOptions() {
         const sistemaSelect = document.getElementById('sistema');
         const codigoSelect = document.getElementById('codigoCorreia');
@@ -2031,6 +1869,20 @@
         } else {
             capProjInput.value = '';
         }
+    }
+
+    function limparFormulario() {
+        document.getElementById('inspecaoForm').reset();
+        document.getElementById('registroId').value = '';
+        document.getElementById('previewFotos').innerHTML = '';
+        
+        document.querySelectorAll('.problema-container').forEach(container => {
+            container.style.display = 'none';
+            const select = container.querySelector('select');
+            const textarea = container.querySelector('textarea');
+            if (select) Array.from(select.options).forEach(opt => opt.selected = false);
+            if (textarea) textarea.value = '';
+        });
     }
 
     function coletarDadosFormulario() {
@@ -2210,6 +2062,7 @@
         atualizarSelectsRelatorioEQR();
 
         alert('Registro salvo/atualizado com sucesso!');
+        limparFormulario();
     }
 
     function atualizarContadorRegistros() {
@@ -2249,16 +2102,15 @@
         set('condicaoEmendas', reg.condicaoEmendas);
         set('condicaoRaspadores', reg.condicaoRaspadores);
         set('condicaoVedacao', reg.condicaoVedacao);
-
         set('condicaoLubrificacao', reg.condicaoLubrificacao);
         set('condicaoMotor', reg.condicaoMotor);
         set('condicaoRaspadoresSec', reg.condicaoRaspadoresSec);
         set('condicaoRetorno', reg.condicaoRetorno);
         set('condicaoRoletesImpacto', reg.condicaoRoletesImpacto);
-
         set('condicaoOperacional', reg.condicaoOperacional);
         set('condicaoAmbiental', reg.condicaoAmbiental);
 
+        // Restaura problemas mecânicos
         if (reg.problemasMecanica) {
             Object.keys(reg.problemasMecanica).forEach(key => {
                 const select = document.getElementById(key);
@@ -2286,6 +2138,7 @@
             });
         }
 
+        // Restaura problemas elétricos
         if (reg.problemasEletrica) {
             Object.keys(reg.problemasEletrica).forEach(key => {
                 const select = document.getElementById(key);
@@ -2313,6 +2166,7 @@
             });
         }
 
+        // Restaura problemas operacionais
         if (reg.condicaoOperacional === 'NÃO OK' && reg.problemasOperacional) {
             const container = document.getElementById('problemasOperacional');
             if (container) {
@@ -2332,6 +2186,7 @@
             }
         }
 
+        // Restaura problemas ambientais
         if (reg.condicaoAmbiental === 'NÃO OK' && reg.problemasAmbiental) {
             const container = document.getElementById('problemasAmbiental');
             if (container) {
@@ -2402,7 +2257,6 @@
 
         fil.forEach(reg => {
             const tr = document.createElement('tr');
-
             const problemasResumo = (reg.problemasIdentificados || []).slice(0, 2).join(', ');
             const problemasTexto = problemasResumo || '-';
 
@@ -2429,7 +2283,6 @@
                     </button>
                 </td>
             `;
-
             tbody.appendChild(tr);
         });
     }
@@ -2812,9 +2665,6 @@
         const container = document.getElementById('relatorioConteudo');
         if (!container) return;
 
-        const fotosDiv = document.createElement('div');
-        fotosDiv.id = 'relatorioFotos';
-
         if (!reg) {
             container.innerHTML = '<p class="text-muted small-text">Registro não encontrado.</p>';
             return;
@@ -2907,7 +2757,7 @@
             <div class="section-title">Fotos (amostra reduzida)</div>
         `;
 
-        const fotos = lerFotosBase64DoRegistro(reg);
+        const fotos = reg.fotosBase64 || [];
         const divFotos = document.createElement('div');
         divFotos.id = 'relatorioFotos';
         fotos.slice(0, 4).forEach(b64 => {
@@ -3065,42 +2915,176 @@
         });
     }
 
-    document.addEventListener('DOMContentLoaded', async () => {
-        const cloudOk = initCloud();
-        if (cloudOk) {
-            const remote = await cloudLoadState();
-            if (remote && (Array.isArray(remote.registros) || Array.isArray(remote.sugestoes))) {
-                registros = Array.isArray(remote.registros) ? remote.registros : [];
-                sugestoes = Array.isArray(remote.sugestoes) ? remote.sugestoes : [];
-                try {
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                        version: remote.version || 2,
-                        updatedAt: remote.updatedAtIso || new Date().toISOString(),
-                        registros,
-                        sugestoes
-                    }));
-                } catch(e){}
-            } else {
-                carregarDoLocalStorage();
-            }
+    function analisarTextoSugestaoSimples(texto) {
+        const t = (texto || '').toLowerCase();
+        const tags = [];
 
-            startCloudRealtimeSync(() => {
-                atualizarContadorRegistros();
-                preencherTabelaRegistros();
-                atualizarDashboards();
-                atualizarSelectsRelatorioEQR();
-                preencherTabelaSugestoes();
-            });
+        const addTag = (tag, palavras) => {
+            if (palavras.some(p => t.includes(p))) {
+                tags.push(tag);
+            }
+        };
+
+        addTag('SEGURANCA', ['segurança', 'seguranca', 'risco', 'acidente', 'epi', 'queda']);
+        addTag('LIMPEZA', ['limpeza', 'sujar', 'sujidade', 'material acumulado', 'acúmulo', 'acumulo']);
+        addTag('ROLETES', ['rolete', 'roletes']);
+        addTag('RASPADOR', ['raspador', 'raspadores']);
+        addTag('VEDACAO', ['vedação', 'vedacao']);
+        addTag('SENSOR', ['sensor', 'chave', 'intertravamento']);
+        addTag('TREINAMENTO', ['treinamento', 'capacitação', 'capacitacao', 'reciclagem']);
+        addTag('AMBIENTAL', ['poeira', 'pó', 'po', 'água', 'agua', 'lama', 'resíduo', 'residuo']);
+        addTag('SAP', ['sap', 'ordem', 'om ', 'os ']);
+        addTag('FLUXO_MATERIAL', ['nível alto', 'nivel alto', 'entupido', 'obstruído', 'obstruido', 'fluxo', 'retomada']);
+
+        let prioridade = 'MÉDIA';
+        if (
+            t.includes('parada') || t.includes('parou') ||
+            t.includes('travado') || t.includes('travou') ||
+            t.includes('falha') || t.includes('quebrado') ||
+            t.includes('risco') || t.includes('crítico') || t.includes('critico')
+        ) {
+            prioridade = 'ALTA';
+        } else if (
+            t.includes('sugestão') || t.includes('sugestao') ||
+            t.includes('melhoria') || t.includes('otimização') || t.includes('otimizacao')
+        ) {
+            prioridade = 'BAIXA';
+        }
+
+        const resumo = texto && texto.length > 140 ? texto.slice(0, 137) + '...' : (texto || '');
+
+        return { tags, prioridade, resumo };
+    }
+
+    function registrarSugestao() {
+        const dataCampo = document.getElementById('sugData');
+        const respCampo = document.getElementById('sugResponsavel');
+        const sisCampo = document.getElementById('sugSistema');
+        const codCampo = document.getElementById('sugCodigo');
+        const txtCampo = document.getElementById('sugTexto');
+
+        const texto = (txtCampo && txtCampo.value || '').trim();
+        if (!texto) {
+            alert('Descreva a sugestão / problema antes de registrar.');
+            if (txtCampo) txtCampo.focus();
+            return;
+        }
+
+        const analise = analisarTextoSugestaoSimples(texto);
+        const sug = {
+            id: 'SUG-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+            data: (dataCampo && dataCampo.value) || new Date().toISOString().slice(0, 10),
+            responsavel: (respCampo && respCampo.value || '').trim(),
+            sistema: (sisCampo && sisCampo.value) || '',
+            codigo: (codCampo && codCampo.value || '').trim(),
+            texto,
+            prioridade: analise.prioridade,
+            tags: analise.tags,
+            resumo: analise.resumo
+        };
+
+        if (!Array.isArray(sugestoes)) sugestoes = [];
+        sugestoes.push(sug);
+        salvarNoLocalStorage();
+        preencherTabelaSugestoes();
+
+        const resEl = document.getElementById('sugResultado');
+        if (resEl) {
+            const cls =
+                analise.prioridade === 'ALTA' ? 'badge bg-danger' :
+                analise.prioridade === 'MÉDIA' ? 'badge bg-warning text-dark' :
+                'badge bg-success';
+            resEl.innerHTML =
+                '<strong>Análise automática:</strong> prioridade ' +
+                '<span class="' + cls + '">' + analise.prioridade + '</span>' +
+                (analise.tags.length
+                    ? ' · tags sugeridas: <span class="text-muted">' + analise.tags.join(', ') + '</span>'
+                    : ' · texto genérico, sem tags específicas.');
+        }
+
+        if (txtCampo) txtCampo.value = '';
+    }
+
+    function preencherTabelaSugestoes() {
+        const tbody = document.querySelector('#tabelaSugestoes tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        if (!Array.isArray(sugestoes) || sugestoes.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="7" class="text-center text-muted small-text">Nenhuma sugestão registrada até o momento.</td>';
+            tbody.appendChild(tr);
+            return;
+        }
+
+        sugestoes.sort((a, b) => {
+            const prioridadeOrder = { 'ALTA': 1, 'MÉDIA': 2, 'BAIXA': 3 };
+            if (prioridadeOrder[a.prioridade] !== prioridadeOrder[b.prioridade]) {
+                return prioridadeOrder[a.prioridade] - prioridadeOrder[b.prioridade];
+            }
+            return new Date(b.data) - new Date(a.data);
+        });
+
+        sugestoes.forEach(s => {
+            const tr = document.createElement('tr');
+            const prioridade = s.prioridade || 'MÉDIA';
+            const badgeClass =
+                prioridade === 'ALTA' ? 'badge bg-danger' :
+                prioridade === 'MÉDIA' ? 'badge bg-warning text-dark' :
+                'badge bg-success';
+
+            tr.innerHTML =
+                '<td>' + (s.data || '-') + '</td>' +
+                '<td>' + (s.sistema || '-') + '</td>' +
+                '<td>' + (s.codigo || '-') + '</td>' +
+                '<td><span class="' + badgeClass + '">' + prioridade + '</span></td>' +
+                '<td>' + (s.responsavel || '-') + '</td>' +
+                '<td class="small-text">' + ((s.tags || []).join(', ') || '-') + '</td>' +
+                '<td>' +
+                    '<button class="btn btn-sm btn-outline-danger btn-excluir-sugestao" data-id="' + s.id + '">' +
+                        '<i class="fa-solid fa-trash"></i>' +
+                    '</button>' +
+                '</td>';
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    // ===== SENSOR PARA DASHBOARD =====
+    function enviarSensorParaDashboard() {
+        // Função vazia - mantida para compatibilidade
+        // O sensor foi removido para evitar conflitos
+    }
+
+    // ===== INICIALIZAÇÃO =====
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Inicializa Firebase
+        initFirebase();
+
+        // Tenta carregar do Firestore primeiro
+        const remoteData = await loadFromFirestore();
+        if (remoteData && (remoteData.registros || remoteData.sugestoes)) {
+            registros = remoteData.registros || [];
+            sugestoes = remoteData.sugestoes || [];
+            // Salva no localStorage como backup
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteData));
         } else {
+            // Se não conseguir, carrega do localStorage
             carregarDoLocalStorage();
         }
 
+        // Inicia sincronização em tempo real
+        startFirestoreSync();
+
+        // Atualiza UI
         atualizarContadorRegistros();
         preencherTabelaRegistros();
         atualizarDashboards();
         atualizarSelectsRelatorioEQR();
         preencherTabelaSugestoes();
         
+        // Configura eventos
         configurarEventosCondicoes();
 
         const sistemaSelect = document.getElementById('sistema');
@@ -3114,6 +3098,7 @@
             codigoSelect.addEventListener('change', aoSelecionarCodigoCorreia);
         }
 
+        // Botões
         const btnNovo = document.getElementById('btnNovo');
         const btnLimpar = document.getElementById('btnLimpar');
         const btnSalvar = document.getElementById('btnSalvar');
@@ -3309,65 +3294,6 @@
             btnRegistrarSugestao.addEventListener('click', registrarSugestao);
         }
     });
-</script>
-
-<!-- SENSOR NAZA PORTAL - CORREIAS (AGORA FUNCIONAL) -->
-<script>
-(function(){
-    // Usar a mesma versão do Firebase já carregada
-    const firebaseConfig = {
-        apiKey: "AIzaSyDneReMjO78JqJ-LvmSTiQqUMkxT97H6JE",
-        authDomain: "naza-auditoria-hub.firebaseapp.com",
-        databaseURL: "https://naza-auditoria-hub-default-rtdb.firebaseio.com",
-        projectId: "naza-auditoria-hub"
-    };
-    
-    // Inicializa apenas se necessário
-    if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-    }
-    
-    // Usar o Firebase Database
-    const db = firebase.database();
-    const SISTEMA_ID = 'correia';
-    
-    const num = (id) => {
-        const el = document.getElementById(id); 
-        if(!el) return 0; 
-        const m = (el.textContent||'').replace(/\./g,'').replace(',','.').match(/-?\d+(?:\.\d+)?/); 
-        return m ? Number(m[0]) : 0;
-    };
-    
-    function coletar() { 
-        const total = num('kpiTotalCorreias'), 
-              crit = num('kpiCriticas'), 
-              at = num('kpiAtencao'), 
-              norm = num('kpiNormais'); 
-        const gauge = total > 0 ? (norm/total * 100) : 0; 
-        return {
-            sistema: SISTEMA_ID,
-            valores: [gauge, total, crit],
-            dadosCompletos: {
-                total,
-                criticas: crit,
-                atencao: at,
-                normais: norm
-            },
-            timestamp: Date.now()
-        }; 
-    }
-    
-    function enviar() {
-        const payload = coletar(); 
-        db.ref('sensores/' + SISTEMA_ID).set(payload)
-            .then(() => console.log('🟢 Sensor Correias ativo', payload))
-            .catch(err => console.warn('Sensor erro:', err));
-    }
-    
-    // Aguarda elementos carregarem
-    setTimeout(enviar, 4000); 
-    setInterval(enviar, 30000);
-})();
 </script>
 </body>
 </html>
