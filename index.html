@@ -162,6 +162,34 @@
             color: #842029;
             border: 1px solid #f5c2c7;
         }
+        .continental-legend {
+            font-size: 0.78rem;
+        }
+        .continental-legend th,
+        .continental-legend td {
+            vertical-align: middle;
+            padding: 0.35rem 0.5rem;
+        }
+        .continental-legend .swatch {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 2px;
+            margin-right: 0.35rem;
+            vertical-align: middle;
+            border: 1px solid rgba(0,0,0,0.12);
+        }
+        .ci-1 { background-color: #198754; color: #fff; }
+        .ci-2 { background-color: #ffc107; color: #212529; }
+        .ci-3 { background-color: #dc3545; color: #fff; }
+        .ci-TA { background-color: #6f42c1; color: #fff; }
+        .ci-CT { background-color: #0dcaf0; color: #212529; }
+        .ri-A { background-color: #ffc107; color: #212529; }
+        .ri-B { background-color: #fd7e14; color: #fff; }
+        .ri-C { background-color: #e36414; color: #fff; }
+        .ri-D { background-color: #dc3545; color: #fff; }
+        .ri-E { background-color: #6c757d; color: #fff; }
+        .ri-F { background-color: #cd853f; color: #fff; }
     </style>
 </head>
 <body>
@@ -299,6 +327,16 @@
                                 <div class="mb-2">
                                     <label class="form-label">Data da Inspeção</label>
                                     <input type="date" id="dataInspecao" class="form-control">
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label">1ª ocorrência</label>
+                                        <input type="date" id="dataPrimeiraOcorrencia" class="form-control" title="Data da primeira ocorrência (campo relatório)">
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label">Data retorno / recorrência</label>
+                                        <input type="date" id="dataRecorrer" class="form-control" title="Data para recorrer ou acompanhamento">
+                                    </div>
                                 </div>
                                 <div class="mb-2">
                                     <label class="form-label">Responsável pela Inspeção</label>
@@ -812,6 +850,52 @@
                             </div>
                         </div>
 
+                        <!-- Classificação Continental / SAP -->
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white">
+                                Classificação Continental · SAP &amp; criticidade
+                            </div>
+                            <div class="card-body">
+                                <p class="small-text text-muted mb-2">
+                                    Campos do relatório de inspeção: Nota SAP, condição irregular, risco iminente e correção indicada.
+                                    A legenda completa está na aba <strong>Banco de Dados &amp; Filtros</strong>.
+                                </p>
+                                <div class="mb-2">
+                                    <label class="form-label">Nota SAP</label>
+                                    <input type="text" id="notaSAP" class="form-control" placeholder="Número da ordem / nota SAP">
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label">Condição irregular</label>
+                                        <select id="condicaoIrregular" class="form-select">
+                                            <option value="">Selecione</option>
+                                            <option value="1">1 – Branda (acompanhar evolução)</option>
+                                            <option value="2">2 – Preocupante (preparar para eliminar)</option>
+                                            <option value="3">3 – Crítica (eliminar imediatamente)</option>
+                                            <option value="TA">TA – Ponto crítico · tambores</option>
+                                            <option value="CT">CT – Ponto crítico · correias</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label">Risco iminente</label>
+                                        <select id="riscoIminente" class="form-select">
+                                            <option value="">Selecione</option>
+                                            <option value="A">A – Aumentar o dano</option>
+                                            <option value="B">B – Perder a emenda</option>
+                                            <option value="C">C – Perder a correia</option>
+                                            <option value="D">D – Cair a correia</option>
+                                            <option value="E">E – Danificar o tambor</option>
+                                            <option value="F">F – Rasgar correia</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Correção indicada</label>
+                                    <textarea id="correcaoIndicada" class="form-control" rows="2" placeholder="Ação corretiva indicada"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- ⚠️ Problemas & Diagnóstico -->
                         <div class="card">
                             <div class="card-header bg-info text-white">
@@ -912,6 +996,33 @@
                                     <option value="Carregador">Carregador</option>
                                 </select>
                             </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Condição irregular</label>
+                                <select id="filtroCondicaoIrregular" class="form-select">
+                                    <option value="">Todas</option>
+                                    <option value="1">1 – Branda</option>
+                                    <option value="2">2 – Preocupante</option>
+                                    <option value="3">3 – Crítica</option>
+                                    <option value="TA">TA</option>
+                                    <option value="CT">CT</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Risco iminente</label>
+                                <select id="filtroRiscoIminente" class="form-select">
+                                    <option value="">Todos</option>
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                    <option value="D">D</option>
+                                    <option value="E">E</option>
+                                    <option value="F">F</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Nota SAP (contém)</label>
+                                <input type="text" id="filtroNotaSAP" class="form-control" placeholder="Trecho do número SAP">
+                            </div>
                         </div>
                         <div class="mt-3 d-flex justify-content-between">
                             <div>
@@ -938,6 +1049,44 @@
                             O backup inclui todas as correias e sistemas salvos. Ao importar, os dados são
                             <strong>mesclados</strong> com o que já existe.
                         </div>
+                        <div class="mt-3">
+                            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#legendaContinental" aria-expanded="false">
+                                <i class="fa-solid fa-table"></i> Legenda · Condição irregular &amp; risco iminente (Continental)
+                            </button>
+                            <div class="collapse mt-2" id="legendaContinental">
+                                <div class="row g-2">
+                                    <div class="col-lg-6">
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered table-sm continental-legend mb-0">
+                                                <thead class="table-light"><tr><th colspan="2">Condição irregular</th></tr></thead>
+                                                <tbody>
+                                                    <tr><td><span class="swatch" style="background:#198754"></span><strong>1</strong> Branda</td><td class="text-muted">Acompanhar evolução</td></tr>
+                                                    <tr><td><span class="swatch" style="background:#ffc107"></span><strong>2</strong> Preocupante</td><td class="text-muted">Preparar para eliminar</td></tr>
+                                                    <tr><td><span class="swatch" style="background:#dc3545"></span><strong>3</strong> Crítica</td><td class="text-muted">Eliminar imediatamente</td></tr>
+                                                    <tr><td><span class="swatch" style="background:#6f42c1"></span><strong>TA</strong> Ponto crítico</td><td class="text-muted">Atento à situação de tambores</td></tr>
+                                                    <tr><td><span class="swatch" style="background:#0dcaf0"></span><strong>CT</strong> Ponto crítico</td><td class="text-muted">Atento à situação de correias</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered table-sm continental-legend mb-0">
+                                                <thead class="table-light"><tr><th colspan="2">Riscos iminentes</th></tr></thead>
+                                                <tbody>
+                                                    <tr><td><span class="swatch" style="background:#ffc107"></span><strong>A</strong></td><td class="text-muted">Aumentar o dano</td></tr>
+                                                    <tr><td><span class="swatch" style="background:#fd7e14"></span><strong>B</strong></td><td class="text-muted">Perder a emenda</td></tr>
+                                                    <tr><td><span class="swatch" style="background:#e36414"></span><strong>C</strong></td><td class="text-muted">Perder a correia</td></tr>
+                                                    <tr><td><span class="swatch" style="background:#dc3545"></span><strong>D</strong></td><td class="text-muted">Cair a correia</td></tr>
+                                                    <tr><td><span class="swatch" style="background:#6c757d"></span><strong>E</strong></td><td class="text-muted">Danificar o tambor</td></tr>
+                                                    <tr><td><span class="swatch" style="background:#cd853f"></span><strong>F</strong></td><td class="text-muted">Rasgar correia</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -949,12 +1098,16 @@
                         <table class="table table-sm table-striped align-middle" id="tabelaRegistros">
                             <thead class="table-light">
                             <tr>
-                                <th>Código</th>
+                                <th>Data insp.</th>
                                 <th>Sistema</th>
+                                <th>Código</th>
                                 <th>Nome</th>
                                 <th>Capacidade</th>
+                                <th>Nota SAP</th>
+                                <th>Cond. irr.</th>
+                                <th>Risco</th>
+                                <th>Correção ind.</th>
                                 <th>Status</th>
-                                <th>Data Insp.</th>
                                 <th>Problemas</th>
                                 <th>Ações</th>
                             </tr>
@@ -1151,6 +1304,19 @@
                             </div>
                             <div class="card-body chart-container">
                                 <canvas id="respTurnoChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-lg-12">
+                        <div class="card">
+                            <div class="card-header bg-secondary text-white">
+                                Pareto por Equipamento (Código)
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="equipamentosParetoChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -1470,7 +1636,8 @@
         sistemaChart: null,
         problemasChart: null,
         capacidadeChart: null,
-        respTurnoChart: null
+        respTurnoChart: null,
+        paretoEquipChart: null
     };
     let html5QrScanner = null;
     let db = null;
@@ -1498,12 +1665,18 @@
                 { id: "centro_8", name: "Correias", nominal: 2500, code: "11CV39" , tipo: "Correia" },
                 { id: "centro_9", name: "Correias", nominal: 2500, code: "11CV40" , tipo: "Correia" },
                 { id: "centro_10", name: "Correias", nominal:2500, code: "11CV41" , tipo: "Correia" },
+                { id: "centro_11", name: "Correia transporte", nominal: 2500, code: "02CV037", tipo: "Correia" },
+                { id: "centro_12", name: "Correia transporte", nominal: 2500, code: "02CV038", tipo: "Correia" },
+                { id: "centro_13", name: "Correia transporte", nominal: 2500, code: "02CV039", tipo: "Correia" },
+                { id: "centro_14", name: "Correia transporte", nominal: 2500, code: "02CV040", tipo: "Correia" },
+                { id: "centro_15", name: "Correia transporte", nominal: 2500, code: "02CV041", tipo: "Correia" },
             ],
             gargalo: 1640
         },
         "Alegria Norte": {
             equipments: [
                 { id: "norte_1", name: "11CR10", nominal: 1640, code: "11CR10", tipo: "Carregador" },
+                { id: "norte_4", name: "11CR15", nominal: 1640, code: "11CR15", tipo: "Hopper" },
                 { id: "norte_2", name: "11CV23", nominal: 2500, code: "11CV23", tipo: "Correia" },
                 { id: "norte_3", name: "11CV24", nominal: 2915, code: "11CV24", tipo: "Correia" }
             ],
@@ -1520,8 +1693,15 @@
         "Alegria Sul 2": {
             equipments: [
                 { id: "sul2_1", name: "11LKT03", nominal: 2000, project: 2640, code: "11LKT03", tipo: "Lokotrack" },
+                { id: "sul2_1b", name: "11LK03", nominal: 2000, project: 2640, code: "11LK03", tipo: "Lokotrack" },
                 { id: "sul2_2", name: "11CR14 (Hopper 19)", nominal: 2915, project: 3500, code: "11CR14", tipo: "Hopper" },
+                { id: "sul2_5", name: "02CV009", nominal: 3970, code: "02CV009", tipo: "Stacker" },
+                { id: "sul2_6", name: "11CV68", nominal: 2500, code: "11CV68", tipo: "Correia" },
                 { id: "sul2_3", name: "11CV67", nominal: 3840, code: "11CV67", tipo: "Correia" },
+                { id: "sul2_7", name: "11CV07", nominal: 2500, code: "11CV07", tipo: "Correia" },
+                { id: "sul2_8", name: "11CR05", nominal: 2915, code: "11CR05", tipo: "Hopper" },
+                { id: "sul2_9", name: "11CV69", nominal: 2500, code: "11CV69", tipo: "Correia" },
+                { id: "sul2_10", name: "11CR19", nominal: 2915, code: "11CR19", tipo: "Hopper" },
                 { id: "sul2_4", name: "11CV73", nominal: 2500, code: "11CV73", tipo: "Correia" }
             ],
             gargalo: 2000
@@ -1543,6 +1723,68 @@
         "Fazendão": "Fazendão",
         "Marginal Vale": "Marginal Vale"
     };
+
+    /** Esquema de criticidade — relatório Continental (condição irregular + risco iminente) */
+    const CONTINENTAL_CONDICAO_IRREGULAR = {
+        '1': { titulo: 'Branda', acao: 'Acompanhar evolução', cls: 'ci-1' },
+        '2': { titulo: 'Preocupante', acao: 'Preparar para eliminar', cls: 'ci-2' },
+        '3': { titulo: 'Crítica', acao: 'Eliminar imediatamente', cls: 'ci-3' },
+        'TA': { titulo: 'Ponto crítico (tambores)', acao: 'Atento à situação de tambores', cls: 'ci-TA' },
+        'CT': { titulo: 'Ponto crítico (correias)', acao: 'Atento à situação de correias', cls: 'ci-CT' }
+    };
+
+    const CONTINENTAL_RISCO_IMINENTE = {
+        'A': { texto: 'Aumentar o dano', cls: 'ri-A' },
+        'B': { texto: 'Perder a emenda', cls: 'ri-B' },
+        'C': { texto: 'Perder a correia', cls: 'ri-C' },
+        'D': { texto: 'Cair a correia', cls: 'ri-D' },
+        'E': { texto: 'Danificar o tambor', cls: 'ri-E' },
+        'F': { texto: 'Rasgar correia', cls: 'ri-F' }
+    };
+
+    function ordenarRegistrosInspecao(list) {
+        const ts = (d) => {
+            if (!d || typeof d !== 'string') return null;
+            const t = Date.parse(d);
+            return Number.isNaN(t) ? null : t;
+        };
+        return [...list].sort((a, b) => {
+            const ta = ts(a.dataInspecao);
+            const tb = ts(b.dataInspecao);
+            if (ta !== tb) {
+                if (ta == null && tb == null) { /* fall through */ }
+                else if (ta == null) return 1;
+                else if (tb == null) return -1;
+                else if (tb !== ta) return ta - tb;
+            }
+            const sa = (a.sistema || '').localeCompare(b.sistema || '', 'pt-BR');
+            if (sa !== 0) return sa;
+            return (a.codigo || '').localeCompare(b.codigo || '', 'pt-BR', { numeric: true });
+        });
+    }
+
+    function badgeCondicaoIrregular(cod) {
+        if (!cod || !CONTINENTAL_CONDICAO_IRREGULAR[cod]) {
+            return '<span class="badge bg-secondary">—</span>';
+        }
+        const x = CONTINENTAL_CONDICAO_IRREGULAR[cod];
+        return `<span class="badge ${x.cls}" title="${x.acao}">${cod} · ${x.titulo}</span>`;
+    }
+
+    function badgeRiscoIminente(cod) {
+        if (!cod || !CONTINENTAL_RISCO_IMINENTE[cod]) {
+            return '<span class="badge bg-secondary">—</span>';
+        }
+        const x = CONTINENTAL_RISCO_IMINENTE[cod];
+        return `<span class="badge ${x.cls}" title="${x.texto}">${cod}</span>`;
+    }
+
+    function truncarTexto(s, max) {
+        if (!s) return '';
+        const t = String(s).trim();
+        if (t.length <= max) return t;
+        return t.slice(0, max - 1) + '…';
+    }
 
     // ===== UTILITÁRIOS =====
     function mostrarIndicadorSalvando() {
@@ -1608,6 +1850,16 @@
         if (cNom && !cProj) return cNom + ' t/h';
         if (!cNom && cProj) return cProj + ' t/h (proj)';
         return cNom + ' / ' + cProj + ' t/h';
+    }
+
+    function formatDateBR(isoDate) {
+        if (!isoDate) return '-';
+        const s = String(isoDate).trim();
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+        const t = Date.parse(s);
+        if (!Number.isNaN(t)) return new Date(t).toLocaleDateString('pt-BR');
+        return s;
     }
 
     // ===== FIREBASE FUNCTIONS =====
@@ -1979,8 +2231,15 @@
             capacidadeNominal: get('capacidadeNominal'),
             capacidadeProjetada: get('capacidadeProjetada'),
             dataInspecao: get('dataInspecao'),
+            dataPrimeiraOcorrencia: get('dataPrimeiraOcorrencia'),
+            dataRecorrer: get('dataRecorrer'),
             responsavelInspecao: get('responsavelInspecao'),
             turno: get('turno'),
+
+            notaSAP: get('notaSAP'),
+            condicaoIrregular: get('condicaoIrregular'),
+            riscoIminente: get('riscoIminente'),
+            correcaoIndicada: get('correcaoIndicada'),
 
             condicaoRoletes: get('condicaoRoletes'),
             condicaoAlinhamento: get('condicaoAlinhamento'),
@@ -2085,8 +2344,15 @@
         set('capacidadeNominal', reg.capacidadeNominal);
         set('capacidadeProjetada', reg.capacidadeProjetada);
         set('dataInspecao', reg.dataInspecao);
+        set('dataPrimeiraOcorrencia', reg.dataPrimeiraOcorrencia);
+        set('dataRecorrer', reg.dataRecorrer);
         set('responsavelInspecao', reg.responsavelInspecao);
         set('turno', reg.turno);
+
+        set('notaSAP', reg.notaSAP);
+        set('condicaoIrregular', reg.condicaoIrregular);
+        set('riscoIminente', reg.riscoIminente);
+        set('correcaoIndicada', reg.correcaoIndicada);
 
         set('condicaoRoletes', reg.condicaoRoletes);
         set('condicaoAlinhamento', reg.condicaoAlinhamento);
@@ -2222,12 +2488,18 @@
         const cod = document.getElementById('filtroCodigo') ? document.getElementById('filtroCodigo').value.toLowerCase() : '';
         const st = document.getElementById('filtroStatus') ? document.getElementById('filtroStatus').value : '';
         const tp = document.getElementById('filtroTipo') ? document.getElementById('filtroTipo').value : '';
+        const ci = document.getElementById('filtroCondicaoIrregular') ? document.getElementById('filtroCondicaoIrregular').value : '';
+        const ri = document.getElementById('filtroRiscoIminente') ? document.getElementById('filtroRiscoIminente').value : '';
+        const sap = document.getElementById('filtroNotaSAP') ? document.getElementById('filtroNotaSAP').value.trim().toLowerCase() : '';
 
         return registros.filter(r => {
             if (s && r.sistema !== s) return false;
             if (cod && !(r.codigo || '').toLowerCase().includes(cod)) return false;
             if (st && r.statusCritico !== st) return false;
             if (tp && r.tipoEquipamento !== tp) return false;
+            if (ci && (r.condicaoIrregular || '') !== ci) return false;
+            if (ri && (r.riscoIminente || '') !== ri) return false;
+            if (sap && !(String(r.notaSAP || '').toLowerCase().includes(sap))) return false;
             return true;
         });
     }
@@ -2238,10 +2510,10 @@
 
         tbody.innerHTML = '';
 
-        const fil = aplicarFiltros();
+        const fil = ordenarRegistrosInspecao(aplicarFiltros());
         if (fil.length === 0) {
             const tr = document.createElement('tr');
-            tr.innerHTML = '<td colspan="8" class="text-center text-muted">Nenhum registro encontrado.</td>';
+            tr.innerHTML = '<td colspan="12" class="text-center text-muted">Nenhum registro encontrado.</td>';
             tbody.appendChild(tr);
             return;
         }
@@ -2250,14 +2522,19 @@
             const tr = document.createElement('tr');
             const problemasResumo = (reg.problemasIdentificados || []).slice(0, 2).join(', ');
             const problemasTexto = problemasResumo || '-';
+            const corr = truncarTexto(reg.correcaoIndicada, 48);
 
             tr.innerHTML = `
-                <td>${reg.codigo || '-'}</td>
+                <td>${formatDateBR(reg.dataInspecao)}</td>
                 <td>${reg.sistema || '-'}</td>
+                <td>${reg.codigo || '-'}</td>
                 <td>${reg.nomeCorreia || '-'}</td>
                 <td>${formatCapacidade(reg.capacidadeNominal, reg.capacidadeProjetada)}</td>
+                <td class="small-text">${reg.notaSAP || '-'}</td>
+                <td class="small-text">${badgeCondicaoIrregular(reg.condicaoIrregular)}</td>
+                <td class="small-text">${badgeRiscoIminente(reg.riscoIminente)}</td>
+                <td class="small-text" title="${(reg.correcaoIndicada || '').replace(/"/g, '&quot;')}">${corr || '-'}</td>
                 <td>${statusBadge(reg.statusCritico)}</td>
-                <td>${reg.dataInspecao || '-'}</td>
                 <td class="small-text">${problemasTexto}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-primary me-1 btn-editar" data-id="${reg.id}">
@@ -2315,8 +2592,14 @@
             CapacidadeNominal_th: r.capacidadeNominal || '',
             CapacidadeProjetada_th: r.capacidadeProjetada || '',
             DataInspecao: r.dataInspecao || '',
+            DataPrimeiraOcorrencia: r.dataPrimeiraOcorrencia || '',
+            DataRecorrer: r.dataRecorrer || '',
             ResponsavelInspecao: r.responsavelInspecao || '',
             Turno: r.turno || '',
+            NotaSAP: r.notaSAP || '',
+            CondicaoIrregular: r.condicaoIrregular || '',
+            RiscoIminente: r.riscoIminente || '',
+            CorrecaoIndicada: r.correcaoIndicada || '',
             Cond_Roletes: r.condicaoRoletes || '',
             Cond_Alinhamento: r.condicaoAlinhamento || '',
             Cond_Emendas: r.condicaoEmendas || '',
@@ -2589,6 +2872,78 @@
                 }
             });
         }
+
+        // Pareto por equipamento (código): barras (qtd) + linha (% acumulado)
+        const contEquip = {};
+        registros.forEach(r => {
+            const c = (r.codigo || '').trim();
+            if (!c) return;
+            contEquip[c] = (contEquip[c] || 0) + 1;
+        });
+        const equipOrdenados = Object.entries(contEquip).sort((a, b) => b[1] - a[1]);
+        const topN = 15;
+        const labelsE = equipOrdenados.slice(0, topN).map(x => x[0]);
+        const dataE = equipOrdenados.slice(0, topN).map(x => x[1]);
+        const totalE = dataE.reduce((acc, v) => acc + v, 0) || 0;
+        let soma = 0;
+        const cumulPct = dataE.map(v => {
+            soma += v;
+            return totalE ? Math.round((soma / totalE) * 1000) / 10 : 0; // 1 casa
+        });
+
+        const ctxParetoEq = document.getElementById('equipamentosParetoChart');
+        if (ctxParetoEq) {
+            if (charts.paretoEquipChart) charts.paretoEquipChart.destroy();
+            charts.paretoEquipChart = new Chart(ctxParetoEq.getContext('2d'), {
+                data: {
+                    labels: labelsE,
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Inspeções (qtd)',
+                            data: dataE,
+                            backgroundColor: '#0d6efd',
+                            yAxisID: 'y'
+                        },
+                        {
+                            type: 'line',
+                            label: '% acumulado',
+                            data: cumulPct,
+                            borderColor: '#dc3545',
+                            backgroundColor: 'rgba(220,53,69,0.15)',
+                            pointRadius: 2,
+                            tension: 0.25,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: true },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    if (ctx.dataset.yAxisID === 'y1') return `${ctx.dataset.label}: ${ctx.raw}%`;
+                                    return `${ctx.dataset.label}: ${ctx.raw}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Qtd' } },
+                        y1: {
+                            beginAtZero: true,
+                            max: 100,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            ticks: { callback: (v) => v + '%' },
+                            title: { display: true, text: '% acumulado' }
+                        }
+                    }
+                }
+            });
+        }
     }
 
     function calcularSimulador() {
@@ -2628,11 +2983,7 @@
 
         if (!relSel || !qrSel) return;
 
-        const ordenados = [...registros].sort((a, b) => {
-            const sa = (a.sistema || '') + (a.codigo || '');
-            const sb = (b.sistema || '') + (b.codigo || '');
-            return sa.localeCompare(sb);
-        });
+        const ordenados = ordenarRegistrosInspecao(registros);
 
         relSel.innerHTML = '<option value="">Selecione</option>';
         qrSel.innerHTML = '<option value="">Selecione</option>';
@@ -2698,11 +3049,26 @@
                 Capacidade projetada: <strong>${reg.capacidadeProjetada || '-'}</strong> t/h
             </div>
             <div class="linha small-text">
-                Data inspeção: <strong>${reg.dataInspecao || '-'}</strong> ·
+                Data inspeção: <strong>${formatDateBR(reg.dataInspecao)}</strong> ·
                 Responsável: <strong>${reg.responsavelInspecao || '-'}</strong> ·
                 Turno: <strong>${reg.turno || '-'}</strong>
             </div>
+            <div class="linha small-text">
+                1ª ocorrência: <strong>${formatDateBR(reg.dataPrimeiraOcorrencia)}</strong> ·
+                Retorno / recorrência: <strong>${formatDateBR(reg.dataRecorrer)}</strong>
+            </div>
             ${blocoPeriodo}
+
+            <div class="section-title">SAP &amp; criticidade (Continental)</div>
+            <div class="linha small-text">
+                Nota SAP: <strong>${reg.notaSAP || '-'}</strong><br>
+                Condição irregular: ${badgeCondicaoIrregular(reg.condicaoIrregular)}<br>
+                Risco iminente: ${badgeRiscoIminente(reg.riscoIminente)}
+            </div>
+            <div class="linha small-text">
+                <strong>Correção indicada:</strong><br>
+                ${reg.correcaoIndicada || '-'}
+            </div>
 
             <div class="section-title">Condições Críticas - MECÂNICA</div>
             <div class="linha small-text">
@@ -2805,7 +3171,9 @@
             return;
         }
 
-        const payload = `CORREIA|${reg.id}`;
+        const cod = (reg.codigo || '').replace(/\|/g, ' ');
+        const sis = (reg.sistema || '').replace(/\|/g, ' ');
+        const payload = `CORREIA|${reg.id}|${cod}|${sis}`;
         const div = document.createElement('div');
         box.appendChild(div);
 
@@ -2814,6 +3182,11 @@
             width: 200,
             height: 200
         });
+
+        const leg = document.createElement('div');
+        leg.className = 'small-text text-muted mt-2 text-center';
+        leg.innerHTML = `${reg.codigo || reg.id} · ${reg.sistema || ''}<br><span class="text-break">${payload}</span>`;
+        box.appendChild(leg);
     }
 
     function baixarQRCodePNG() {
@@ -2851,10 +3224,16 @@
                 }
 
                 if (decodedText.startsWith('CORREIA|')) {
-                    const id = decodedText.split('|')[1];
-                    const reg = registros.find(r => r.id === id);
+                    const parts = decodedText.split('|');
+                    const id = parts[1] || '';
+                    const codigoQr = (parts[2] || '').trim();
+                    let reg = registros.find(r => r.id === id);
+                    if (!reg && codigoQr) {
+                        const cands = registros.filter(r => (r.codigo || '') === codigoQr);
+                        if (cands.length === 1) reg = cands[0];
+                    }
                     if (reg) {
-                        carregarRegistroNoFormulario(id);
+                        carregarRegistroNoFormulario(reg.id);
                         alert(`Correia ${reg.codigo || ''} carregada a partir do QR Code.`);
                     } else {
                         alert('ID de correia não encontrado no banco local. Importar backup se for outro aparelho.');
@@ -3107,6 +3486,12 @@
                 if (filtroCodigo) filtroCodigo.value = '';
                 if (filtroStatus) filtroStatus.value = '';
                 if (filtroTipo) filtroTipo.value = '';
+                const filtroCondicaoIrregular = document.getElementById('filtroCondicaoIrregular');
+                const filtroRiscoIminente = document.getElementById('filtroRiscoIminente');
+                const filtroNotaSAP = document.getElementById('filtroNotaSAP');
+                if (filtroCondicaoIrregular) filtroCondicaoIrregular.value = '';
+                if (filtroRiscoIminente) filtroRiscoIminente.value = '';
+                if (filtroNotaSAP) filtroNotaSAP.value = '';
                 preencherTabelaRegistros();
             });
         }
