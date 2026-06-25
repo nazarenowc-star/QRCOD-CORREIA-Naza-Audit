@@ -30,6 +30,10 @@
     <!-- html-docx-js – exportar relatório para Word (.docx) -->
     <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js"></script>
 
+    <!-- Firebase (sincronização na nuvem entre aparelhos) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
     <style>
         body {
             background-color: #f4f6f8;
@@ -174,9 +178,14 @@
             <i class="fas fa-conveyor-belt"></i> Gestão de Correias Transportadoras
         </span>
 
-        <span class="badge bg-light text-primary small-text">
-            Dados salvos localmente (offline) · Correias + Sistemas · QR Code
-        </span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-light text-primary small-text">
+                Correias + Sistemas · QR Code
+            </span>
+            <span class="badge bg-secondary small-text" id="statusNuvem" title="Status da sincronização na nuvem">
+                <i class="fa-solid fa-cloud"></i> Nuvem: verificando...
+            </span>
+        </div>
     </div>
 </nav>
 
@@ -849,13 +858,20 @@
                                 <div class="row">
                                     <div class="col-md-6 mb-2">
                                         <label class="form-label d-block">Fotos da Correia</label>
-                                        <label for="fotosCorreiaInput" class="btn btn-outline-primary btn-sm mb-1">
-                                            <i class="fa-solid fa-camera"></i> Tirar/Enviar Fotos
-                                        </label>
+                                        <div class="d-flex flex-wrap gap-2 mb-1">
+                                            <label for="fotosCorreiaInput" class="btn btn-outline-primary btn-sm mb-0">
+                                                <i class="fa-solid fa-camera"></i> Tirar foto
+                                            </label>
+                                            <label for="fotosArquivoInput" class="btn btn-outline-secondary btn-sm mb-0">
+                                                <i class="fa-solid fa-folder-open"></i> Buscar nos arquivos
+                                            </label>
+                                        </div>
                                         <input type="file" id="fotosCorreiaInput" class="form-control d-none"
                                                accept="image/*" capture="environment" multiple>
+                                        <input type="file" id="fotosArquivoInput" class="form-control d-none"
+                                               accept="image/*" multiple>
                                         <div class="form-text small-text">
-                                            Máximo recomendado: 4 fotos por correia.
+                                            Máximo recomendado: 4 fotos por correia. "Tirar foto" abre a câmera; "Buscar nos arquivos" abre a galeria/computador.
                                         </div>
                                         <div id="previewFotos" class="d-flex flex-wrap gap-2 mt-2"></div>
                                     </div>
@@ -953,6 +969,12 @@
                                 <button class="btn btn-outline-success btn-sm me-2" id="btnExportarBackupExcel">
                                     <i class="fa-solid fa-file-excel"></i> Exportar Backup Excel / Macro
                                 </button>
+                                <button class="btn btn-outline-primary btn-sm me-2" id="btnExportarSelecionados">
+                                    <i class="fa-solid fa-square-check"></i> Backup dos selecionados
+                                </button>
+                                <button class="btn btn-success btn-sm me-2" id="btnEnviarWhatsApp">
+                                    <i class="fa-brands fa-whatsapp"></i> Enviar WhatsApp
+                                </button>
                                 <button class="btn btn-outline-warning btn-sm me-2" id="btnRestaurarUltimo" disabled>
                                     <i class="fa-solid fa-rotate-left"></i> Recuperar último deletado
                                 </button>
@@ -976,9 +998,13 @@
                         <table class="table table-sm table-striped align-middle" id="tabelaRegistros">
                             <thead class="table-light">
                             <tr>
+                                <th class="text-center" title="Selecionar para backup/WhatsApp">
+                                    <input type="checkbox" id="chkSelecionarTodos" title="Selecionar todos">
+                                </th>
                                 <th>Código</th>
                                 <th>Sistema</th>
                                 <th>Nome</th>
+                                <th>Responsável</th>
                                 <th>Capacidade</th>
                                 <th>Status</th>
                                 <th>Data Insp.</th>
@@ -1477,12 +1503,13 @@
                                 </div>
                                 <div class="mt-2 d-flex justify-content-between">
                                     <div class="small-text text-muted">
-                                        O QR traz o ID da correia. Ao ler, o app abre o cadastro automaticamente.
+                                        O QR traz o link da correia. Ao ler, o app abre o cadastro automaticamente.
                                     </div>
                                     <button class="btn btn-outline-primary btn-sm" id="btnBaixarQR">
                                         <i class="fa-solid fa-download"></i> Baixar PNG
                                     </button>
                                 </div>
+                                <div id="qrLinkInfo" class="mt-2 small-text text-muted" style="word-break: break-all;"></div>
                             </div>
                         </div>
                     </div>
@@ -1545,6 +1572,208 @@
         dataIni: '',
         dataFim: ''
     };
+
+    // ============================================================
+    // ===== FIREBASE (SINCRONIZAÇÃO NA NUVEM ENTRE APARELHOS) =====
+    // ============================================================
+    // PASSO A PASSO PARA ATIVAR:
+    // 1) Acesse https://console.firebase.google.com e crie um projeto.
+    // 2) Em "Criar app" escolha Web (ícone </>). Copie o objeto firebaseConfig.
+    // 3) Cole os valores abaixo (apiKey, projectId, etc.).
+    // 4) No menu "Firestore Database" -> Criar banco de dados -> modo de teste.
+    // Enquanto os campos estiverem com "COLE_AQUI", o app funciona só offline (localStorage).
+    const firebaseConfig = {
+        apiKey: "AIzaSyBQoo7fENe2mk_qmy20AE5eEwfEKs-ZKeY",
+        authDomain: "qrcode-correia-naza-audit.firebaseapp.com",
+        projectId: "qrcode-correia-naza-audit",
+        storageBucket: "qrcode-correia-naza-audit.firebasestorage.app",
+        messagingSenderId: "857708812761",
+        appId: "1:857708812761:web:0576b1c029c8599851e1c8"
+    };
+
+    let fbDb = null;            // referência do Firestore
+    let fbAtivo = false;        // true quando a nuvem está conectada
+    let aplicandoRemoto = false; // evita loop ao aplicar dados vindos da nuvem
+    let syncTimer = null;       // debounce do envio para a nuvem
+    // Mesma estrutura que já existe no seu Firebase: coleção "apps" -> documento "correias_qrcode_db_v2"
+    const FB_COLECAO = 'apps';
+    const FB_DOC = STORAGE_KEY; // 'correias_qrcode_db_v2'
+
+    function configFirebasePreenchida() {
+        return firebaseConfig &&
+            firebaseConfig.apiKey &&
+            firebaseConfig.apiKey !== 'COLE_AQUI' &&
+            firebaseConfig.projectId &&
+            firebaseConfig.projectId !== 'COLE_AQUI';
+    }
+
+    function atualizarStatusNuvem(estado, texto) {
+        const badge = document.getElementById('statusNuvem');
+        if (!badge) return;
+        const cores = {
+            ok: 'bg-success',
+            offline: 'bg-secondary',
+            erro: 'bg-danger',
+            sync: 'bg-warning text-dark'
+        };
+        badge.className = 'badge small-text ' + (cores[estado] || 'bg-secondary');
+        const icones = {
+            ok: 'fa-cloud',
+            offline: 'fa-cloud-slash',
+            erro: 'fa-triangle-exclamation',
+            sync: 'fa-cloud-arrow-up'
+        };
+        badge.innerHTML = '<i class="fa-solid ' + (icones[estado] || 'fa-cloud') + '"></i> ' + texto;
+    }
+
+    function limparUndefined(obj) {
+        // Firestore não aceita "undefined"; isso remove esses campos.
+        return JSON.parse(JSON.stringify(obj));
+    }
+
+    // Une duas listas por id (sem perder dados). Em caso de mesmo id, o "remoto" prevalece.
+    function mesclarPorId(local, remoto) {
+        const mapa = {};
+        (Array.isArray(local) ? local : []).forEach(x => { if (x && x.id) mapa[x.id] = x; });
+        (Array.isArray(remoto) ? remoto : []).forEach(x => { if (x && x.id) mapa[x.id] = x; });
+        return Object.values(mapa);
+    }
+
+    function refreshTudoUI() {
+        atualizarContadorRegistros();
+        preencherTabelaRegistros();
+        atualizarDashboards();
+        atualizarSelectsRelatorioEQR();
+        if (typeof atualizarDashboardCorreiaSelect === 'function') atualizarDashboardCorreiaSelect();
+        if (typeof preencherTabelaSugestoes === 'function') preencherTabelaSugestoes();
+    }
+
+    function initFirebase() {
+        if (!configFirebasePreenchida()) {
+            atualizarStatusNuvem('offline', 'Nuvem: não configurada (offline)');
+            return;
+        }
+        if (typeof firebase === 'undefined' || !firebase.initializeApp) {
+            atualizarStatusNuvem('erro', 'Nuvem: SDK não carregou');
+            return;
+        }
+        try {
+            firebase.initializeApp(firebaseConfig);
+            fbDb = firebase.firestore();
+            fbAtivo = true;
+            atualizarStatusNuvem('sync', 'Nuvem: conectando...');
+
+            const ref = fbDb.collection(FB_COLECAO).doc(FB_DOC);
+            // 1) lê o que já existe na nuvem e mescla com o local (sem perder nada)
+            ref.get().then(snap => {
+                if (snap.exists) {
+                    const d = snap.data() || {};
+                    registros = mesclarPorId(registros, d.registros);
+                    sugestoes = mesclarPorId(sugestoes, d.sugestoes);
+                    aplicandoRemoto = true;
+                    salvarNoLocalStorage();
+                    aplicandoRemoto = false;
+                    refreshTudoUI();
+                }
+                // 2) grava o resultado mesclado (cria o documento se não existir)
+                return enviarTudoParaFirebase();
+            }).then(() => {
+                // 3) passa a escutar mudanças em tempo real
+                escutarFirebase();
+            }).catch(err => {
+                console.error('Erro ao iniciar Firebase', err);
+                atualizarStatusNuvem('erro', 'Nuvem: erro de conexão');
+            });
+        } catch (e) {
+            console.error('Falha ao inicializar Firebase', e);
+            atualizarStatusNuvem('erro', 'Nuvem: erro na configuração');
+        }
+    }
+
+    function enviarTudoParaFirebase() {
+        if (!fbAtivo || !fbDb) return Promise.resolve();
+        const pacote = limparUndefined({
+            version: 2,
+            updatedAt: new Date().toISOString(),
+            registros,
+            sugestoes,
+            deletedRegistros
+        });
+        return fbDb.collection(FB_COLECAO).doc(FB_DOC).set(pacote);
+    }
+
+    function escutarFirebase() {
+        if (!fbAtivo || !fbDb) return;
+        atualizarStatusNuvem('ok', 'Nuvem: conectada (' + registros.length + ')');
+
+        fbDb.collection(FB_COLECAO).doc(FB_DOC).onSnapshot(snap => {
+            if (!snap.exists) return;
+            const d = snap.data() || {};
+            aplicandoRemoto = true;
+            registros = Array.isArray(d.registros) ? d.registros : [];
+            sugestoes = Array.isArray(d.sugestoes) ? d.sugestoes : [];
+            if (Array.isArray(d.deletedRegistros)) deletedRegistros = d.deletedRegistros;
+            salvarNoLocalStorage();
+            refreshTudoUI();
+            aplicandoRemoto = false;
+            atualizarStatusNuvem('ok', 'Nuvem: conectada (' + registros.length + ')');
+        }, err => {
+            console.error('Erro no listener da nuvem', err);
+            atualizarStatusNuvem('erro', 'Nuvem: erro de leitura');
+        });
+    }
+
+    function agendarSyncFirebase() {
+        if (!fbAtivo || aplicandoRemoto) return;
+        atualizarStatusNuvem('sync', 'Nuvem: salvando...');
+        clearTimeout(syncTimer);
+        syncTimer = setTimeout(() => {
+            enviarTudoParaFirebase()
+                .then(() => atualizarStatusNuvem('ok', 'Nuvem: conectada (' + registros.length + ')'))
+                .catch(err => {
+                    console.error('Erro ao sincronizar', err);
+                    atualizarStatusNuvem('erro', 'Nuvem: erro ao salvar');
+                });
+        }, 1200);
+    }
+
+    // No modelo de documento único, exclusões já são refletidas quando o documento
+    // inteiro é regravado por salvarNoLocalStorage(). Estas funções existem só para
+    // compatibilidade com as chamadas no código (não precisam fazer nada extra).
+    function fbExcluirRegistro() { /* tratado por salvarNoLocalStorage -> agendarSyncFirebase */ }
+    function fbExcluirSugestao() { /* idem */ }
+    function fbApagarTudoNuvem() { /* idem */ }
+
+    // Reduz o tamanho das fotos (ajuda a caber na nuvem e ocupa menos espaço local).
+    function comprimirImagem(dataUrl, maxLado = 1000, qualidade = 0.6) {
+        return new Promise(resolve => {
+            try {
+                const img = new Image();
+                img.onload = () => {
+                    let { width, height } = img;
+                    if (width > maxLado || height > maxLado) {
+                        if (width >= height) {
+                            height = Math.round(height * (maxLado / width));
+                            width = maxLado;
+                        } else {
+                            width = Math.round(width * (maxLado / height));
+                            height = maxLado;
+                        }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', qualidade));
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+            } catch (_) {
+                resolve(dataUrl);
+            }
+        });
+    }
 
     function formatarValorGrafico(valor) {
         const n = Number(valor);
@@ -2048,6 +2277,8 @@
             alert('Erro ao salvar dados. Verifique o espaço disponível.');
             console.error('Erro ao salvar', e);
         }
+        // Sincroniza com a nuvem (se o Firebase estiver configurado/ativo)
+        agendarSyncFirebase();
     }
 
     // ===== FORM / CADASTRO =====
@@ -2503,7 +2734,7 @@
         const fil = aplicarFiltros();
         if (fil.length === 0) {
             const tr = document.createElement('tr');
-            tr.innerHTML = '<td colspan="9" class="text-center text-muted">Nenhum registro encontrado.</td>';
+            tr.innerHTML = '<td colspan="11" class="text-center text-muted">Nenhum registro encontrado.</td>';
             tbody.appendChild(tr);
             return;
         }
@@ -2515,9 +2746,13 @@
             const problemasTexto = problemasResumo || '-';
 
             tr.innerHTML = `
+                <td class="text-center">
+                    <input type="checkbox" class="chk-backup" value="${reg.id}" title="Selecionar para backup/WhatsApp">
+                </td>
                 <td>${reg.codigo || '-'}</td>
                 <td>${reg.sistema || '-'}</td>
                 <td>${reg.nomeCorreia || '-'}</td>
+                <td>${reg.responsavelInspecao || '-'}</td>
                 <td>${formatCapacidade(reg.capacidadeNominal, reg.capacidadeProjetada)}</td>
                 <td>${statusBadge(reg.statusCritico)}</td>
                 <td>${formatDateBR(reg.dataInspecao) || '-'}</td>
@@ -2544,12 +2779,24 @@
     }
 
     // ===== BACKUP / EXPORTAÇÃO =====
-    function exportarBackup() {
+    function getIdsSelecionados() {
+        return Array.from(document.querySelectorAll('.chk-backup:checked')).map(c => c.value);
+    }
+
+    function getRegistrosSelecionados() {
+        const ids = getIdsSelecionados();
+        if (!ids.length) return [];
+        return registros.filter(r => ids.includes(r.id));
+    }
+
+    function exportarBackup(listaRegistros) {
+        const usarSelecao = Array.isArray(listaRegistros);
+        const regs = usarSelecao ? listaRegistros : registros;
         const pacote = {
             version: 2,
             updatedAt: new Date().toISOString(),
-            registros,
-            sugestoes
+            registros: regs,
+            sugestoes: usarSelecao ? [] : sugestoes
         };
         const json = JSON.stringify(pacote, null, 2);
         const output = document.getElementById('jsonOutput');
@@ -2564,6 +2811,49 @@
         a.download = 'correias_backup.json';
         a.click();
         URL.revokeObjectURL(url);
+    }
+
+    function exportarBackupSelecionados() {
+        const selecionados = getRegistrosSelecionados();
+        if (!selecionados.length) {
+            alert('Marque pelo menos um registro na tabela para exportar o backup dos selecionados.');
+            return;
+        }
+        exportarBackup(selecionados);
+    }
+
+    function montarTextoWhatsApp(regs) {
+        let texto = 'Relatório de Correias Transportadoras\n';
+        texto += 'Gerado em: ' + new Date().toLocaleString('pt-BR') + '\n';
+        texto += 'Total: ' + regs.length + ' correia(s)\n\n';
+        regs.forEach((r, i) => {
+            const probs = (r.problemasIdentificados || []).slice(0, 3).join(', ');
+            texto += (i + 1) + ') ' + (r.codigo || 's/ código');
+            if (r.nomeCorreia) texto += ' - ' + r.nomeCorreia;
+            texto += '\n';
+            if (r.sistema) texto += '   Sistema: ' + r.sistema + '\n';
+            if (r.statusCritico) texto += '   Status: ' + r.statusCritico + '\n';
+            if (r.dataInspecao) texto += '   Inspeção: ' + (formatDateBR(r.dataInspecao) || r.dataInspecao) + '\n';
+            if (probs) texto += '   Problemas: ' + probs + '\n';
+            texto += '\n';
+        });
+        return texto;
+    }
+
+    function enviarWhatsApp() {
+        const selecionados = getRegistrosSelecionados();
+        const regs = selecionados.length ? selecionados : registros;
+        if (!regs.length) {
+            alert('Não há registros para enviar.');
+            return;
+        }
+        if (!selecionados.length &&
+            !confirm('Nenhum registro foi marcado. Deseja enviar o resumo de TODAS as correias?')) {
+            return;
+        }
+        const texto = montarTextoWhatsApp(regs);
+        const url = 'https://wa.me/?text=' + encodeURIComponent(texto);
+        window.open(url, '_blank');
     }
 
     function exportarBackupExcelMacro() {
@@ -4162,7 +4452,7 @@
             return;
         }
 
-        const payload = `CORREIA|${reg.id}`;
+        const payload = montarLinkCorreia(reg.id);
         const div = document.createElement('div');
         box.appendChild(div);
 
@@ -4171,6 +4461,59 @@
             width: 200,
             height: 200
         });
+
+        const infoQR = document.getElementById('qrLinkInfo');
+        if (infoQR) {
+            if (/^https?:/i.test(payload)) {
+                infoQR.innerHTML = 'Este QR Code é um link. A câmera do celular já consegue abri-lo: ' +
+                    '<br><span class="small-text">' + payload + '</span>';
+            } else {
+                infoQR.innerHTML = '<strong>Atenção:</strong> o arquivo está aberto direto do computador (file://). ' +
+                    'Para a câmera nativa do celular abrir pelo QR Code, hospede o sistema em um endereço https ' +
+                    '(ex.: Firebase Hosting, GitHub Pages). Dentro do app, o leitor já funciona normalmente.';
+            }
+        }
+    }
+
+    // Monta um link que abre o próprio sistema já apontando para a correia.
+    // Quando hospedado em https, a câmera nativa do celular consegue abrir.
+    function montarLinkCorreia(id) {
+        const href = (location && location.href) ? location.href.split('#')[0].split('?')[0] : '';
+        if (/^https?:/i.test(href)) {
+            return href + '?correia=' + encodeURIComponent(id);
+        }
+        // Sem servidor (file://): mantém o formato antigo, lido apenas dentro do app.
+        return 'CORREIA|' + id;
+    }
+
+    // Extrai o id da correia tanto do formato antigo (CORREIA|id) quanto do link (?correia=id).
+    function extrairIdCorreia(texto) {
+        if (!texto) return '';
+        if (texto.startsWith('CORREIA|')) {
+            return texto.split('|')[1] || '';
+        }
+        try {
+            const u = new URL(texto);
+            const id = u.searchParams.get('correia');
+            if (id) return id;
+        } catch (_) { /* não é URL válida */ }
+        return '';
+    }
+
+    // Ao abrir o sistema por um link de QR Code (?correia=id), carrega a correia automaticamente.
+    function carregarCorreiaPelaURL() {
+        try {
+            const params = new URLSearchParams(location.search);
+            const id = params.get('correia');
+            if (!id) return;
+            const reg = registros.find(r => r.id === id);
+            if (reg) {
+                carregarRegistroNoFormulario(id);
+                gerarQRCodeParaRegistro(id);
+            } else {
+                alert('QR Code lido, mas esta correia não está no banco deste aparelho. Importe o backup correspondente.');
+            }
+        } catch (_) { /* ignora */ }
     }
 
     function baixarQRCodePNG() {
@@ -4207,8 +4550,8 @@
                     scanResult.innerText = decodedText;
                 }
 
-                if (decodedText.startsWith('CORREIA|')) {
-                    const id = decodedText.split('|')[1];
+                const id = extrairIdCorreia(decodedText);
+                if (id) {
                     const reg = registros.find(r => r.id === id);
                     if (reg) {
                         carregarRegistroNoFormulario(id);
@@ -4258,11 +4601,13 @@
         selecionados.forEach(file => {
             const reader = new FileReader();
             reader.onload = e => {
-                const img = document.createElement('img');
-                img.className = 'foto-preview';
-                img.src = e.target.result;
-                img.dataset.base64 = e.target.result;
-                preview.appendChild(img);
+                comprimirImagem(e.target.result).then(base64 => {
+                    const img = document.createElement('img');
+                    img.className = 'foto-preview';
+                    img.src = base64;
+                    img.dataset.base64 = base64;
+                    preview.appendChild(img);
+                });
             };
             reader.readAsDataURL(file);
         });
@@ -4275,6 +4620,8 @@
     document.addEventListener('DOMContentLoaded', () => {
         // Carrega dados
         carregarDoLocalStorage();
+        carregarCorreiaPelaURL();
+        initFirebase();
         atualizarContadorRegistros();
         preencherTabelaRegistros();
         atualizarDashboards();
@@ -4307,6 +4654,11 @@
         const fotosInput = document.getElementById('fotosCorreiaInput');
         if (fotosInput) {
             fotosInput.addEventListener('change', handleFotosInput);
+        }
+
+        const fotosArquivoInput = document.getElementById('fotosArquivoInput');
+        if (fotosArquivoInput) {
+            fotosArquivoInput.addEventListener('change', handleFotosInput);
         }
 
         // Filtros / Banco
@@ -4343,6 +4695,25 @@
         if (btnExportarBackupExcel) {
             btnExportarBackupExcel.addEventListener('click', exportarBackupExcelMacro);
         }
+
+        const btnExportarSelecionados = document.getElementById('btnExportarSelecionados');
+        if (btnExportarSelecionados) {
+            btnExportarSelecionados.addEventListener('click', exportarBackupSelecionados);
+        }
+
+        const btnEnviarWhatsApp = document.getElementById('btnEnviarWhatsApp');
+        if (btnEnviarWhatsApp) {
+            btnEnviarWhatsApp.addEventListener('click', enviarWhatsApp);
+        }
+
+        const chkSelecionarTodos = document.getElementById('chkSelecionarTodos');
+        if (chkSelecionarTodos) {
+            chkSelecionarTodos.addEventListener('change', () => {
+                document.querySelectorAll('.chk-backup').forEach(c => {
+                    c.checked = chkSelecionarTodos.checked;
+                });
+            });
+        }
         
         if (btnApagarTudo) {
             btnApagarTudo.addEventListener('click', () => {
@@ -4350,6 +4721,7 @@
                 registros = [];
                 sugestoes = [];
                 deletedRegistros = [];
+                fbApagarTudoNuvem();
                 salvarNoLocalStorage();
                 atualizarContadorRegistros();
                 preencherTabelaRegistros();
@@ -4401,6 +4773,7 @@
                     } else {
                         registros = registros.filter(r => r.id !== id);
                     }
+                    fbExcluirRegistro(id);
                     salvarNoLocalStorage();
                     atualizarContadorRegistros();
                     preencherTabelaRegistros();
@@ -4441,6 +4814,7 @@
                 if (btn.classList.contains('btn-excluir-sugestao')) {
                     if (!confirm('Excluir esta sugestão?')) return;
                     sugestoes = sugestoes.filter(s => s.id !== id);
+                    fbExcluirSugestao(id);
                     salvarNoLocalStorage();
                     preencherTabelaSugestoes();
                 }
