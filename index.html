@@ -203,25 +203,79 @@
             <i class="fa-solid fa-lock"></i> Acesso ao Sistema de Correias
         </div>
         <div class="card-body">
-            <div class="mb-2">
-                <label class="form-label">E-mail</label>
-                <input type="email" id="loginEmail" class="form-control" autocomplete="username" placeholder="seu@email.com">
+            <ul class="nav nav-tabs mb-3" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="tabUsuarioBtn" data-bs-toggle="tab" data-bs-target="#tabUsuario" type="button">
+                        <i class="fa-solid fa-user"></i> Usuário
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tabAdminBtn" data-bs-toggle="tab" data-bs-target="#tabAdmin" type="button">
+                        <i class="fa-solid fa-user-shield"></i> Administrador
+                    </button>
+                </li>
+            </ul>
+            <div class="tab-content">
+                <!-- Aba Usuário (Técnico) -->
+                <div class="tab-pane fade show active" id="tabUsuario">
+                    <form id="formUsuario" onsubmit="return false;">
+                        <div class="mb-2">
+                            <label class="form-label">E-mail</label>
+                            <input type="email" id="loginEmail" class="form-control" autocomplete="username" placeholder="seu@email.com">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Senha</label>
+                            <input type="password" id="loginSenha" class="form-control" autocomplete="current-password" placeholder="Sua senha">
+                        </div>
+                        <div class="d-grid gap-2 mt-2">
+                            <button type="button" class="btn btn-primary" id="btnEntrar">
+                                <i class="fa-solid fa-right-to-bracket"></i> Entrar
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCriarConta">
+                                <i class="fa-solid fa-user-plus"></i> Criar conta
+                            </button>
+                        </div>
+                        <div class="form-text small-text mt-2">
+                            Técnico: cadastra inspeções e edita/corrige <strong>apenas as suas</strong>.
+                        </div>
+                    </form>
+                </div>
+                <!-- Aba Administrador -->
+                <div class="tab-pane fade" id="tabAdmin">
+                    <form id="formAdmin" onsubmit="return false;">
+                        <div class="mb-2">
+                            <label class="form-label">Senha do Administrador</label>
+                            <input type="password" id="loginSenhaAdmin" class="form-control" autocomplete="current-password" placeholder="Digite a senha do administrador">
+                        </div>
+                        <div class="d-grid gap-2 mt-2">
+                            <button type="button" class="btn btn-dark" id="btnEntrarAdmin">
+                                <i class="fa-solid fa-user-shield"></i> Entrar como Administrador
+                            </button>
+                        </div>
+                        <div class="form-text small-text mt-2">
+                            Administrador: acesso total (edita qualquer inspeção e pode apagar tudo).
+                        </div>
+                    </form>
+                </div>
             </div>
-            <div class="mb-2">
-                <label class="form-label">Senha</label>
-                <input type="password" id="loginSenha" class="form-control" autocomplete="current-password" placeholder="Sua senha">
-            </div>
-            <div id="loginErro" class="alert alert-danger py-1 px-2 small-text" style="display:none;"></div>
-            <div class="d-grid gap-2 mt-2">
-                <button class="btn btn-primary" id="btnEntrar">
-                    <i class="fa-solid fa-right-to-bracket"></i> Entrar
-                </button>
-                <button class="btn btn-outline-secondary btn-sm" id="btnCriarConta">
-                    <i class="fa-solid fa-user-plus"></i> Criar conta
-                </button>
-            </div>
-            <div class="form-text small-text mt-2">
-                Use o e-mail e a senha da sua equipe. Para o primeiro acesso, crie a conta uma vez.
+            <div id="loginErro" class="alert alert-danger py-1 px-2 small-text mt-2" style="display:none;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- VISUALIZAÇÃO PÚBLICA (somente leitura) - abre ao ler o QR Code pela câmera do celular -->
+<div id="viewerOverlay" style="position:fixed; inset:0; background:#f4f6f8; z-index:21000; display:none; overflow:auto;">
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container-fluid">
+            <span class="navbar-brand"><i class="fas fa-conveyor-belt"></i> Consulta da Correia</span>
+            <span class="badge bg-light text-primary small-text"><i class="fa-solid fa-eye"></i> Somente leitura</span>
+        </div>
+    </nav>
+    <div class="container py-3" style="max-width:720px;">
+        <div id="viewerConteudo">
+            <div class="text-center text-muted py-5">
+                <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                <div class="mt-2">Carregando dados da correia...</div>
             </div>
         </div>
     </div>
@@ -991,6 +1045,16 @@
                                 </select>
                             </div>
                         </div>
+                        <div class="row g-2 mt-1">
+                            <div class="col-md-3">
+                                <label class="form-label">Data Inspeção - De</label>
+                                <input type="date" id="filtroDataIni" class="form-control">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Data Inspeção - Até</label>
+                                <input type="date" id="filtroDataFim" class="form-control">
+                            </div>
+                        </div>
                         <div class="mt-3 d-flex justify-content-between">
                             <div>
                                 <button class="btn btn-primary btn-sm me-2" id="btnAplicarFiltros">
@@ -1530,8 +1594,18 @@
                                 <i class="fa-solid fa-qrcode"></i> Gerar QR Code da Correia
                             </div>
                             <div class="card-body">
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label small-text">Data Inspeção - De</label>
+                                        <input type="date" id="qrDataIni" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small-text">Data Inspeção - Até</label>
+                                        <input type="date" id="qrDataFim" class="form-control form-control-sm">
+                                    </div>
+                                </div>
                                 <div class="mb-2">
-                                    <label class="form-label">Selecione a Correia</label>
+                                    <label class="form-label">Selecione a Correia <span class="small-text text-muted">(ordenadas da mais recente para a mais antiga)</span></label>
                                     <select id="qrCorreiaSelect" class="form-select">
                                         <!-- Preenchido via JS -->
                                     </select>
@@ -1632,6 +1706,11 @@
     let fbDb = null;            // referência do Firestore
     let fbAuth = null;          // referência da Autenticação
     let fbAtivo = false;        // true quando a nuvem está conectada
+    // Conta de administrador (CRIE essa conta no Firebase: Authentication -> Add user).
+    const ADMIN_EMAIL = 'admin@correias.com';
+    let usuarioEhAdmin = false;
+    let usuarioAtualEmail = '';
+    let usuarioAtualUid = '';
     let aplicandoRemoto = false; // evita loop ao aplicar dados vindos da nuvem
     let syncTimer = null;       // debounce do envio para a nuvem
     let snapRegistrosPronto = false;
@@ -1712,13 +1791,24 @@
             // Controla o acesso: só sincroniza depois que o usuário fizer login.
             fbAuth.onAuthStateChanged(user => {
                 if (user) {
+                    usuarioAtualEmail = user.email || '';
+                    usuarioAtualUid = user.uid || '';
+                    usuarioEhAdmin = !!(usuarioAtualEmail &&
+                        usuarioAtualEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase());
                     esconderLogin();
                     atualizarUsuarioUI(user);
+                    aplicarPermissoesUI();
                     if (!sincronizacaoIniciada) {
                         sincronizacaoIniciada = true;
                         iniciarSincronizacaoFirebase();
+                    } else {
+                        // troca de usuário sem recarregar: atualiza a tabela conforme novo perfil
+                        preencherTabelaRegistros();
                     }
                 } else {
+                    usuarioEhAdmin = false;
+                    usuarioAtualEmail = '';
+                    usuarioAtualUid = '';
                     atualizarUsuarioUI(null);
                     mostrarLogin();
                     atualizarStatusNuvem('offline', 'Nuvem: faça login');
@@ -1750,13 +1840,58 @@
         const emailSpan = document.getElementById('usuarioEmail');
         const btnSair = document.getElementById('btnSair');
         if (user) {
-            if (emailSpan) emailSpan.textContent = user.email || 'conectado';
+            const perfil = usuarioEhAdmin ? 'Administrador' : 'Técnico';
+            if (emailSpan) emailSpan.textContent = (user.email || 'conectado') + ' · ' + perfil;
             if (info) info.style.display = '';
             if (btnSair) btnSair.style.display = '';
         } else {
             if (info) info.style.display = 'none';
             if (btnSair) btnSair.style.display = 'none';
         }
+    }
+
+    // Controle de acesso só vale quando o Firebase/login está configurado.
+    function controleDeAcessoAtivo() {
+        return configFirebasePreenchida();
+    }
+
+    // Define se o usuário atual pode editar/excluir um registro específico.
+    function podeEditarRegistro(reg) {
+        if (!controleDeAcessoAtivo()) return true; // modo offline sem login: liberado
+        if (usuarioEhAdmin) return true;
+        return !!(reg && reg.criadoPorUid && reg.criadoPorUid === usuarioAtualUid);
+    }
+
+    // Mostra/esconde botões perigosos conforme o perfil.
+    function aplicarPermissoesUI() {
+        const somenteAdmin = controleDeAcessoAtivo() && !usuarioEhAdmin;
+        const btnApagarTudo = document.getElementById('btnApagarTudo');
+        const btnImportarBackup = document.getElementById('btnImportarBackup');
+        if (btnApagarTudo) btnApagarTudo.style.display = somenteAdmin ? 'none' : '';
+        if (btnImportarBackup) btnImportarBackup.style.display = somenteAdmin ? 'none' : '';
+        // re-renderiza a tabela para ajustar os botões de editar/excluir por registro
+        if (typeof preencherTabelaRegistros === 'function') preencherTabelaRegistros();
+    }
+
+    function fazerLoginAdmin() {
+        if (!fbAuth) return;
+        const senha = document.getElementById('loginSenhaAdmin').value || '';
+        const erroEl = document.getElementById('loginErro');
+        if (erroEl) erroEl.style.display = 'none';
+        if (!senha) { mostrarErroLogin('Informe a senha do administrador.'); return; }
+        const btn = document.getElementById('btnEntrarAdmin');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Entrando...'; }
+        fbAuth.signInWithEmailAndPassword(ADMIN_EMAIL, senha)
+            .catch(err => {
+                if (err && (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential')) {
+                    mostrarErroLogin('Conta de administrador não encontrada ou senha incorreta. Crie a conta "' + ADMIN_EMAIL + '" no Firebase (Authentication).');
+                } else {
+                    mostrarErroLogin(traduzirErroAuth(err));
+                }
+            })
+            .finally(() => {
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-shield"></i> Entrar como Administrador'; }
+            });
     }
     function traduzirErroAuth(err) {
         const code = err && err.code ? err.code : '';
@@ -1810,6 +1945,11 @@
 
     function iniciarSincronizacaoFirebase() {
         if (!fbDb) return;
+        // Segurança: só sincroniza se houver um usuário realmente autenticado.
+        if (!fbAuth || !fbAuth.currentUser) {
+            atualizarStatusNuvem('offline', 'Nuvem: faça login');
+            return;
+        }
         fbAtivo = true;
         atualizarStatusNuvem('sync', 'Nuvem: conectando...');
         try {
@@ -1863,11 +2003,12 @@
     }
 
     // Grava cada correia e cada sugestão como um documento próprio (upsert).
+    // O técnico só envia os próprios registros; o administrador envia todos.
     function enviarTudoParaFirebase() {
         if (!fbAtivo || !fbDb) return Promise.resolve();
         const batch = fbDb.batch();
         registros.forEach(r => {
-            if (r && r.id) {
+            if (r && r.id && podeEditarRegistro(r)) {
                 batch.set(fbDb.collection(COL_REGISTROS).doc(String(r.id)), limparUndefined(r));
             }
         });
@@ -2741,11 +2882,21 @@
 
         const idx = registros.findIndex(r => r.id === reg.id);
         if (idx >= 0) {
-            // manter data de lançamento ao editar
-            reg.dataLancamento = registros[idx].dataLancamento || reg.dataLancamento || new Date().toISOString();
+            const existente = registros[idx];
+            // Técnico só pode editar/corrigir as próprias inspeções
+            if (!podeEditarRegistro(existente)) {
+                alert('Você só pode editar as inspeções que você mesmo cadastrou. Peça ao Administrador se precisar alterar esta.');
+                return;
+            }
+            // manter data de lançamento e o dono original ao editar
+            reg.dataLancamento = existente.dataLancamento || reg.dataLancamento || new Date().toISOString();
+            reg.criadoPor = existente.criadoPor || usuarioAtualEmail;
+            reg.criadoPorUid = existente.criadoPorUid || usuarioAtualUid;
             registros[idx] = reg;
         } else {
             reg.dataLancamento = reg.dataLancamento || new Date().toISOString();
+            reg.criadoPor = usuarioAtualEmail;
+            reg.criadoPorUid = usuarioAtualUid;
             registros.push(reg);
         }
         salvarNoLocalStorage();
@@ -2934,13 +3085,30 @@
         const cod = document.getElementById('filtroCodigo') ? document.getElementById('filtroCodigo').value.toLowerCase() : '';
         const st = document.getElementById('filtroStatus') ? document.getElementById('filtroStatus').value : '';
         const tp = document.getElementById('filtroTipo') ? document.getElementById('filtroTipo').value : '';
+        const dIniEl = document.getElementById('filtroDataIni');
+        const dFimEl = document.getElementById('filtroDataFim');
+        const dIni = dIniEl ? parseDateOnlyToComparable(dIniEl.value) : null;
+        const dFim = dFimEl ? parseDateOnlyToComparable(dFimEl.value) : null;
 
-        return registros.filter(r => {
+        const filtrados = registros.filter(r => {
             if (s && r.sistema !== s) return false;
             if (cod && !(r.codigo || '').toLowerCase().includes(cod)) return false;
             if (st && r.statusCritico !== st) return false;
             if (tp && r.tipoEquipamento !== tp) return false;
+            if (dIni || dFim) {
+                const comp = parseDateOnlyToComparable(r.dataInspecao);
+                if (!comp) return false;
+                if (dIni && comp < dIni) return false;
+                if (dFim && comp > dFim) return false;
+            }
             return true;
+        });
+
+        // Ordena por data de inspeção, mais recente primeiro
+        return filtrados.sort((a, b) => {
+            const ca = parseDateOnlyToComparable(a.dataInspecao) || 0;
+            const cb = parseDateOnlyToComparable(b.dataInspecao) || 0;
+            return cb - ca;
         });
     }
 
@@ -2964,6 +3132,18 @@
             const problemasResumo = (reg.problemasIdentificados || []).slice(0, 2).join(', ');
             const problemasTexto = problemasResumo || '-';
 
+            const podeMexer = podeEditarRegistro(reg);
+            const botoesEdicao = podeMexer
+                ? `<button class="btn btn-sm btn-outline-primary me-1 btn-editar" data-id="${reg.id}">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger me-1 btn-excluir" data-id="${reg.id}">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>`
+                : `<button class="btn btn-sm btn-outline-secondary me-1" disabled title="Somente o autor ou o Administrador pode editar/excluir">
+                        <i class="fa-solid fa-lock"></i>
+                    </button>`;
+
             tr.innerHTML = `
                 <td class="text-center">
                     <input type="checkbox" class="chk-backup" value="${reg.id}" title="Selecionar para backup/WhatsApp">
@@ -2978,12 +3158,7 @@
                 <td>${formatDateBR(reg.dataLancamento) || '-'}</td>
                 <td class="small-text">${problemasTexto}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary me-1 btn-editar" data-id="${reg.id}">
-                        <i class="fa-solid fa-pen"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger me-1 btn-excluir" data-id="${reg.id}">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
+                    ${botoesEdicao}
                     <button class="btn btn-sm btn-outline-secondary me-1 btn-relatorio" data-id="${reg.id}">
                         <i class="fa-solid fa-file-pdf"></i>
                     </button>
@@ -3455,33 +3630,59 @@
     }
 
     // ===== RELATÓRIO PDF =====
+    // Preenche um <select> de correias: filtra por data de inspeção, ordena da mais
+    // recente para a mais antiga e mostra a data de inspeção em cada opção.
+    function preencherSelectCorreias(selectEl, dataIni, dataFim) {
+        if (!selectEl) return;
+        const valorAtual = selectEl.value;
+        const dIni = parseDateOnlyToComparable(dataIni);
+        const dFim = parseDateOnlyToComparable(dataFim);
+
+        let lista = [...registros];
+        if (dIni || dFim) {
+            lista = lista.filter(r => {
+                const comp = parseDateOnlyToComparable(r.dataInspecao);
+                if (!comp) return false;
+                if (dIni && comp < dIni) return false;
+                if (dFim && comp > dFim) return false;
+                return true;
+            });
+        }
+
+        lista.sort((a, b) => {
+            const ca = parseDateOnlyToComparable(a.dataInspecao) || 0;
+            const cb = parseDateOnlyToComparable(b.dataInspecao) || 0;
+            return cb - ca; // mais recente primeiro
+        });
+
+        selectEl.innerHTML = '<option value="">Selecione</option>';
+        lista.forEach(r => {
+            const insp = formatDateBR(r.dataInspecao);
+            const dataTxt = insp ? insp : 'sem data';
+            const label = `${dataTxt} · [${r.sistema || '-'}] ${r.codigo || '-'}${r.nomeCorreia ? ' - ' + r.nomeCorreia : ''}`;
+            const opt = document.createElement('option');
+            opt.value = r.id;
+            opt.textContent = label;
+            selectEl.appendChild(opt);
+        });
+
+        // mantém a seleção anterior, se ainda existir na lista filtrada
+        if (valorAtual && lista.some(r => r.id === valorAtual)) {
+            selectEl.value = valorAtual;
+        }
+    }
+
     function atualizarSelectsRelatorioEQR() {
         const relSel = document.getElementById('relatorioCorreiaSelect');
         const qrSel = document.getElementById('qrCorreiaSelect');
 
-        if (!relSel || !qrSel) return;
+        const relIni = document.getElementById('relDataIni') ? document.getElementById('relDataIni').value : '';
+        const relFim = document.getElementById('relDataFim') ? document.getElementById('relDataFim').value : '';
+        const qrIni = document.getElementById('qrDataIni') ? document.getElementById('qrDataIni').value : '';
+        const qrFim = document.getElementById('qrDataFim') ? document.getElementById('qrDataFim').value : '';
 
-        const ordenados = [...registros].sort((a, b) => {
-            const sa = (a.sistema || '') + (a.codigo || '');
-            const sb = (b.sistema || '') + (b.codigo || '');
-            return sa.localeCompare(sb);
-        });
-
-        relSel.innerHTML = '<option value="">Selecione</option>';
-        qrSel.innerHTML = '<option value="">Selecione</option>';
-        ordenados.forEach(r => {
-            const lanc = formatDateBR(r.dataLancamento);
-            const label = `[${r.sistema || '-'}] ${r.codigo || '-'} - ${r.nomeCorreia || ''}${lanc ? ' · Lanç: ' + lanc : ''}`;
-            const opt1 = document.createElement('option');
-            opt1.value = r.id;
-            opt1.textContent = label;
-            relSel.appendChild(opt1);
-
-            const opt2 = document.createElement('option');
-            opt2.value = r.id;
-            opt2.textContent = label;
-            qrSel.appendChild(opt2);
-        });
+        if (relSel) preencherSelectCorreias(relSel, relIni, relFim);
+        if (qrSel) preencherSelectCorreias(qrSel, qrIni, qrFim);
     }
 
     function obterFiltrosRelatorio() {
@@ -4694,18 +4895,18 @@
         }
     }
 
-    // Monta um link que abre o próprio sistema já apontando para a correia.
-    // Quando hospedado em https, a câmera nativa do celular consegue abrir.
+    // Monta o link do QR Code: abre a VISUALIZAÇÃO PÚBLICA (somente leitura), que
+    // qualquer celular consegue abrir pela câmera, sem precisar de login.
     function montarLinkCorreia(id) {
         const href = (location && location.href) ? location.href.split('#')[0].split('?')[0] : '';
         if (/^https?:/i.test(href)) {
-            return href + '?correia=' + encodeURIComponent(id);
+            return href + '?ver=' + encodeURIComponent(id);
         }
         // Sem servidor (file://): mantém o formato antigo, lido apenas dentro do app.
         return 'CORREIA|' + id;
     }
 
-    // Extrai o id da correia tanto do formato antigo (CORREIA|id) quanto do link (?correia=id).
+    // Extrai o id da correia do formato antigo (CORREIA|id) ou do link (?ver=id / ?correia=id).
     function extrairIdCorreia(texto) {
         if (!texto) return '';
         if (texto.startsWith('CORREIA|')) {
@@ -4713,7 +4914,7 @@
         }
         try {
             const u = new URL(texto);
-            const id = u.searchParams.get('correia');
+            const id = u.searchParams.get('ver') || u.searchParams.get('correia');
             if (id) return id;
         } catch (_) { /* não é URL válida */ }
         return '';
@@ -4733,6 +4934,110 @@
                 alert('QR Code lido, mas esta correia não está no banco deste aparelho. Importe o backup correspondente.');
             }
         } catch (_) { /* ignora */ }
+    }
+
+    // ===== VISUALIZAÇÃO PÚBLICA (somente leitura, via QR Code) =====
+    function escaparHTML(txt) {
+        return String(txt == null ? '' : txt)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function idVisualizacaoSolicitado() {
+        try {
+            return new URLSearchParams(location.search).get('ver') || '';
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function iniciarModoVisualizacao(id) {
+        const overlay = document.getElementById('viewerOverlay');
+        if (overlay) overlay.style.display = 'block';
+        // Garante que a tela de login não apareça neste modo
+        esconderLogin();
+
+        if (typeof firebase === 'undefined' || !firebase.initializeApp || !configFirebasePreenchida()) {
+            // Sem nuvem: tenta mostrar do armazenamento local deste aparelho
+            carregarDoLocalStorage();
+            const reg = registros.find(r => String(r.id) === String(id));
+            if (reg) renderViewer(reg);
+            else renderViewerMensagem('Não foi possível carregar os dados (sem conexão com a nuvem).');
+            return;
+        }
+
+        try {
+            if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+            const db = firebase.firestore();
+            db.collection(COL_REGISTROS).doc(String(id)).get()
+                .then(snap => {
+                    if (snap.exists) {
+                        renderViewer(snap.data());
+                    } else {
+                        renderViewerMensagem('Correia não encontrada. Verifique se o QR Code está correto.');
+                    }
+                })
+                .catch(err => {
+                    console.error('Erro na visualização', err);
+                    renderViewerMensagem('Não foi possível carregar os dados desta correia. (Verifique as permissões de leitura no Firebase.)');
+                });
+        } catch (e) {
+            console.error(e);
+            renderViewerMensagem('Erro ao iniciar a visualização.');
+        }
+    }
+
+    function renderViewerMensagem(msg) {
+        const cont = document.getElementById('viewerConteudo');
+        if (cont) {
+            cont.innerHTML = '<div class="alert alert-warning">' + escaparHTML(msg) + '</div>';
+        }
+    }
+
+    function renderViewer(reg) {
+        const cont = document.getElementById('viewerConteudo');
+        if (!cont) return;
+
+        const problemas = (reg.problemasIdentificados || []);
+        const problemasHTML = problemas.length
+            ? '<ul class="mb-0">' + problemas.map(p => '<li>' + escaparHTML(p) + '</li>').join('') + '</ul>'
+            : '<span class="text-muted">Sem problemas registrados.</span>';
+
+        const fotos = (reg.fotosBase64 || []);
+        const fotosHTML = fotos.length
+            ? '<div class="d-flex flex-wrap gap-2">' + fotos.map(f =>
+                '<img src="' + f + '" style="max-width:160px;max-height:120px;border-radius:6px;border:1px solid #ccc;">').join('') + '</div>'
+            : '<span class="text-muted">Sem fotos.</span>';
+
+        const linha = (rotulo, valor) =>
+            '<div class="mb-2"><strong>' + rotulo + ':</strong> ' + (valor ? escaparHTML(valor) : '<span class="text-muted">-</span>') + '</div>';
+
+        const baseUrl = location.href.split('#')[0].split('?')[0];
+
+        cont.innerHTML =
+            '<div class="card shadow-sm mb-3">' +
+                '<div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">' +
+                    '<span><i class="fa-solid fa-conveyor-belt"></i> ' + escaparHTML(reg.codigo || 'Correia') + '</span>' +
+                    '<span>' + (typeof statusBadge === 'function' ? statusBadge(reg.statusCritico) : escaparHTML(reg.statusCritico || '')) + '</span>' +
+                '</div>' +
+                '<div class="card-body">' +
+                    linha('Sistema', reg.sistema) +
+                    linha('Nome', reg.nomeCorreia) +
+                    linha('Tipo', reg.tipoEquipamento) +
+                    linha('Responsável pela inspeção', reg.responsavelInspecao) +
+                    linha('Data da inspeção', formatDateBR(reg.dataInspecao)) +
+                    linha('Capacidade', (typeof formatCapacidade === 'function' ? formatCapacidade(reg.capacidadeNominal, reg.capacidadeProjetada) : '')) +
+                '</div>' +
+            '</div>' +
+            '<div class="card shadow-sm mb-3"><div class="card-header bg-light">Problemas Identificados</div><div class="card-body">' + problemasHTML + '</div></div>' +
+            '<div class="card shadow-sm mb-3"><div class="card-header bg-light">Diagnóstico</div><div class="card-body">' + (reg.diagnostico ? escaparHTML(reg.diagnostico) : '<span class="text-muted">-</span>') + '</div></div>' +
+            '<div class="card shadow-sm mb-3"><div class="card-header bg-light">Soluções Recomendadas</div><div class="card-body">' + (reg.solucoes ? escaparHTML(reg.solucoes) : '<span class="text-muted">-</span>') + '</div></div>' +
+            '<div class="card shadow-sm mb-3"><div class="card-header bg-light">Observações</div><div class="card-body">' + (reg.observacoes ? escaparHTML(reg.observacoes) : '<span class="text-muted">-</span>') + '</div></div>' +
+            '<div class="card shadow-sm mb-3"><div class="card-header bg-light">Fotos</div><div class="card-body">' + fotosHTML + '</div></div>' +
+            '<div class="text-center text-muted small-text mb-4">' +
+                'Visualização somente leitura. ' +
+                '<a href="' + baseUrl + '">Abrir o sistema completo (login)</a>' +
+            '</div>';
     }
 
     function baixarQRCodePNG() {
@@ -4837,6 +5142,13 @@
 
     // ===== INICIALIZAÇÃO E EVENTOS =====
     document.addEventListener('DOMContentLoaded', () => {
+        // Modo de VISUALIZAÇÃO PÚBLICA (QR Code): mostra só a correia, sem login.
+        const idVer = idVisualizacaoSolicitado();
+        if (idVer) {
+            iniciarModoVisualizacao(idVer);
+            return; // não inicia o app completo nem pede login
+        }
+
         // Carrega dados
         carregarDoLocalStorage();
         carregarCorreiaPelaURL();
@@ -4885,12 +5197,20 @@
         const btnCriarConta = document.getElementById('btnCriarConta');
         const btnSair = document.getElementById('btnSair');
         const loginSenha = document.getElementById('loginSenha');
+        const btnEntrarAdmin = document.getElementById('btnEntrarAdmin');
+        const loginSenhaAdmin = document.getElementById('loginSenhaAdmin');
         if (btnEntrar) btnEntrar.addEventListener('click', fazerLogin);
         if (btnCriarConta) btnCriarConta.addEventListener('click', criarConta);
         if (btnSair) btnSair.addEventListener('click', fazerLogout);
         if (loginSenha) {
             loginSenha.addEventListener('keydown', e => {
                 if (e.key === 'Enter') fazerLogin();
+            });
+        }
+        if (btnEntrarAdmin) btnEntrarAdmin.addEventListener('click', fazerLoginAdmin);
+        if (loginSenhaAdmin) {
+            loginSenhaAdmin.addEventListener('keydown', e => {
+                if (e.key === 'Enter') fazerLoginAdmin();
             });
         }
 
@@ -4901,6 +5221,11 @@
         if (btnAplicarFiltros) {
             btnAplicarFiltros.addEventListener('click', preencherTabelaRegistros);
         }
+
+        ['filtroDataIni', 'filtroDataFim'].forEach(idCampo => {
+            const campo = document.getElementById(idCampo);
+            if (campo) campo.addEventListener('change', preencherTabelaRegistros);
+        });
         
         if (btnLimparFiltros) {
             btnLimparFiltros.addEventListener('click', () => {
@@ -4908,11 +5233,15 @@
                 const filtroCodigo = document.getElementById('filtroCodigo');
                 const filtroStatus = document.getElementById('filtroStatus');
                 const filtroTipo = document.getElementById('filtroTipo');
+                const filtroDataIni = document.getElementById('filtroDataIni');
+                const filtroDataFim = document.getElementById('filtroDataFim');
                 
                 if (filtroSistema) filtroSistema.value = '';
                 if (filtroCodigo) filtroCodigo.value = '';
                 if (filtroStatus) filtroStatus.value = '';
                 if (filtroTipo) filtroTipo.value = '';
+                if (filtroDataIni) filtroDataIni.value = '';
+                if (filtroDataFim) filtroDataFim.value = '';
                 preencherTabelaRegistros();
             });
         }
@@ -4950,7 +5279,12 @@
         
         if (btnApagarTudo) {
             btnApagarTudo.addEventListener('click', () => {
-                if (!confirm('Tem certeza que deseja apagar TODOS os registros?')) return;
+                if (!confirm('ATENÇÃO: isto apaga TODAS as correias do banco na NUVEM, para TODOS os aparelhos e usuários. Esta ação não pode ser desfeita.\n\nDeseja continuar?')) return;
+                const conf = prompt('Para confirmar a exclusão de TUDO, digite a palavra: APAGAR');
+                if ((conf || '').trim().toUpperCase() !== 'APAGAR') {
+                    alert('Exclusão cancelada.');
+                    return;
+                }
                 registros = [];
                 sugestoes = [];
                 deletedRegistros = [];
@@ -4996,6 +5330,11 @@
                 if (btn.classList.contains('btn-editar')) {
                     carregarRegistroNoFormulario(id);
                 } else if (btn.classList.contains('btn-excluir')) {
+                    const alvo = registros.find(r => r.id === id);
+                    if (alvo && !podeEditarRegistro(alvo)) {
+                        alert('Você só pode excluir as inspeções que você mesmo cadastrou.');
+                        return;
+                    }
                     if (!confirm('Excluir este registro?')) return;
                     const idx = registros.findIndex(r => r.id === id);
                     if (idx >= 0) {
@@ -5074,6 +5413,10 @@
             const campo = document.getElementById(idCampo);
             if (campo) {
                 campo.addEventListener('change', () => {
+                    // Datas também filtram a lista de correias do seletor de relatório
+                    if (idCampo === 'relDataIni' || idCampo === 'relDataFim') {
+                        atualizarSelectsRelatorioEQR();
+                    }
                     const id = document.getElementById('relatorioCorreiaSelect') ? document.getElementById('relatorioCorreiaSelect').value : '';
                     if (id) {
                         montarPreviewRelatorio(id);
@@ -5081,6 +5424,14 @@
                         montarPreviewRelatorioPeriodo();
                     }
                 });
+            }
+        });
+
+        // Datas filtram a lista de correias do seletor de QR Code
+        ['qrDataIni', 'qrDataFim'].forEach(idCampo => {
+            const campo = document.getElementById(idCampo);
+            if (campo) {
+                campo.addEventListener('change', atualizarSelectsRelatorioEQR);
             }
         });
 
