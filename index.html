@@ -1595,9 +1595,14 @@
     let fbAtivo = false;        // true quando a nuvem está conectada
     let aplicandoRemoto = false; // evita loop ao aplicar dados vindos da nuvem
     let syncTimer = null;       // debounce do envio para a nuvem
-    // Mesma estrutura que já existe no seu Firebase: coleção "apps" -> documento "correias_qrcode_db_v2"
-    const FB_COLECAO = 'apps';
-    const FB_DOC = STORAGE_KEY; // 'correias_qrcode_db_v2'
+    let snapRegistrosPronto = false;
+    let snapSugestoesPronto = false;
+    // Modelo escalável: UM documento por correia (cabe até ~1MB por correia, total até 1GB).
+    const COL_REGISTROS = 'correias';
+    const COL_SUGESTOES = 'sugestoes';
+    // Formato antigo (documento único) - usado só para migrar automaticamente os dados existentes.
+    const FB_COLECAO_LEGADO = 'apps';
+    const FB_DOC_LEGADO = STORAGE_KEY; // 'correias_qrcode_db_v2'
 
     function configFirebasePreenchida() {
         return firebaseConfig &&
@@ -1631,11 +1636,12 @@
         return JSON.parse(JSON.stringify(obj));
     }
 
-    // Une duas listas por id (sem perder dados). Em caso de mesmo id, o "remoto" prevalece.
-    function mesclarPorId(local, remoto) {
+    // Une várias listas por id (sem perder dados). Em caso de mesmo id, a lista posterior prevalece.
+    function mesclarPorId(...listas) {
         const mapa = {};
-        (Array.isArray(local) ? local : []).forEach(x => { if (x && x.id) mapa[x.id] = x; });
-        (Array.isArray(remoto) ? remoto : []).forEach(x => { if (x && x.id) mapa[x.id] = x; });
+        listas.forEach(lista => {
+            (Array.isArray(lista) ? lista : []).forEach(x => { if (x && x.id) mapa[x.id] = x; });
+        });
         return Object.values(mapa);
     }
 
@@ -1663,22 +1669,44 @@
             fbAtivo = true;
             atualizarStatusNuvem('sync', 'Nuvem: conectando...');
 
-            const ref = fbDb.collection(FB_COLECAO).doc(FB_DOC);
-            // 1) lê o que já existe na nuvem e mescla com o local (sem perder nada)
-            ref.get().then(snap => {
-                if (snap.exists) {
-                    const d = snap.data() || {};
-                    registros = mesclarPorId(registros, d.registros);
-                    sugestoes = mesclarPorId(sugestoes, d.sugestoes);
-                    aplicandoRemoto = true;
-                    salvarNoLocalStorage();
-                    aplicandoRemoto = false;
-                    refreshTudoUI();
+            const refLegado = fbDb.collection(FB_COLECAO_LEGADO).doc(FB_DOC_LEGADO);
+
+            // Lê em paralelo: formato antigo (documento único) + formato novo (1 doc por correia)
+            Promise.all([
+                refLegado.get(),
+                fbDb.collection(COL_REGISTROS).get(),
+                fbDb.collection(COL_SUGESTOES).get()
+            ]).then(([snapLegado, snapRegs, snapSugs]) => {
+                let regsLegado = [], sugsLegado = [];
+                let temLegado = false;
+                if (snapLegado.exists) {
+                    const d = snapLegado.data() || {};
+                    regsLegado = Array.isArray(d.registros) ? d.registros : [];
+                    sugsLegado = Array.isArray(d.sugestoes) ? d.sugestoes : [];
+                    temLegado = (regsLegado.length > 0 || sugsLegado.length > 0);
                 }
-                // 2) grava o resultado mesclado (cria o documento se não existir)
-                return enviarTudoParaFirebase();
+                const regsNovos = [];
+                snapRegs.forEach(doc => regsNovos.push(doc.data()));
+                const sugsNovos = [];
+                snapSugs.forEach(doc => sugsNovos.push(doc.data()));
+
+                // Mescla tudo sem perder nada (local + antigo + novo)
+                registros = mesclarPorId(registros, regsLegado, regsNovos);
+                sugestoes = mesclarPorId(sugestoes, sugsLegado, sugsNovos);
+
+                aplicandoRemoto = true;
+                salvarNoLocalStorage();
+                aplicandoRemoto = false;
+                refreshTudoUI();
+
+                // Grava tudo no formato novo (cria as coleções) e migra o antigo
+                return enviarTudoParaFirebase().then(() => {
+                    if (temLegado) {
+                        // Migração concluída: remove o documento antigo para não duplicar
+                        return refLegado.delete().catch(() => {});
+                    }
+                });
             }).then(() => {
-                // 3) passa a escutar mudanças em tempo real
                 escutarFirebase();
             }).catch(err => {
                 console.error('Erro ao iniciar Firebase', err);
@@ -1690,36 +1718,61 @@
         }
     }
 
+    // Grava cada correia e cada sugestão como um documento próprio (upsert).
     function enviarTudoParaFirebase() {
         if (!fbAtivo || !fbDb) return Promise.resolve();
-        const pacote = limparUndefined({
-            version: 2,
-            updatedAt: new Date().toISOString(),
-            registros,
-            sugestoes,
-            deletedRegistros
+        const batch = fbDb.batch();
+        registros.forEach(r => {
+            if (r && r.id) {
+                batch.set(fbDb.collection(COL_REGISTROS).doc(String(r.id)), limparUndefined(r));
+            }
         });
-        return fbDb.collection(FB_COLECAO).doc(FB_DOC).set(pacote);
+        sugestoes.forEach(s => {
+            if (s && s.id) {
+                batch.set(fbDb.collection(COL_SUGESTOES).doc(String(s.id)), limparUndefined(s));
+            }
+        });
+        return batch.commit();
+    }
+
+    function aplicarSnapshots() {
+        // Só atualiza a tela depois que as duas coleções já trouxeram dados ao menos uma vez,
+        // evitando "piscar" a tabela.
+        aplicandoRemoto = true;
+        salvarNoLocalStorage();
+        refreshTudoUI();
+        aplicandoRemoto = false;
+        atualizarStatusNuvem('ok', 'Nuvem: conectada (' + registros.length + ')');
     }
 
     function escutarFirebase() {
         if (!fbAtivo || !fbDb) return;
         atualizarStatusNuvem('ok', 'Nuvem: conectada (' + registros.length + ')');
 
-        fbDb.collection(FB_COLECAO).doc(FB_DOC).onSnapshot(snap => {
-            if (!snap.exists) return;
-            const d = snap.data() || {};
-            aplicandoRemoto = true;
-            registros = Array.isArray(d.registros) ? d.registros : [];
-            sugestoes = Array.isArray(d.sugestoes) ? d.sugestoes : [];
-            if (Array.isArray(d.deletedRegistros)) deletedRegistros = d.deletedRegistros;
-            salvarNoLocalStorage();
-            refreshTudoUI();
-            aplicandoRemoto = false;
-            atualizarStatusNuvem('ok', 'Nuvem: conectada (' + registros.length + ')');
+        fbDb.collection(COL_REGISTROS).onSnapshot(snap => {
+            const remotos = [];
+            snap.forEach(doc => remotos.push(doc.data()));
+            registros = remotos;
+            snapRegistrosPronto = true;
+            aplicarSnapshots();
         }, err => {
-            console.error('Erro no listener da nuvem', err);
+            console.error('Erro no listener de correias', err);
             atualizarStatusNuvem('erro', 'Nuvem: erro de leitura');
+        });
+
+        fbDb.collection(COL_SUGESTOES).onSnapshot(snap => {
+            const remotos = [];
+            snap.forEach(doc => remotos.push(doc.data()));
+            sugestoes = remotos;
+            snapSugestoesPronto = true;
+            if (typeof preencherTabelaSugestoes === 'function') {
+                aplicandoRemoto = true;
+                salvarNoLocalStorage();
+                preencherTabelaSugestoes();
+                aplicandoRemoto = false;
+            }
+        }, err => {
+            console.error('Erro no listener de sugestões', err);
         });
     }
 
@@ -1737,12 +1790,34 @@
         }, 1200);
     }
 
-    // No modelo de documento único, exclusões já são refletidas quando o documento
-    // inteiro é regravado por salvarNoLocalStorage(). Estas funções existem só para
-    // compatibilidade com as chamadas no código (não precisam fazer nada extra).
-    function fbExcluirRegistro() { /* tratado por salvarNoLocalStorage -> agendarSyncFirebase */ }
-    function fbExcluirSugestao() { /* idem */ }
-    function fbApagarTudoNuvem() { /* idem */ }
+    function fbExcluirRegistro(id) {
+        if (!fbAtivo || !fbDb || !id) return;
+        fbDb.collection(COL_REGISTROS).doc(String(id)).delete()
+            .catch(err => console.error('Erro ao excluir na nuvem', err));
+    }
+
+    function fbExcluirSugestao(id) {
+        if (!fbAtivo || !fbDb || !id) return;
+        fbDb.collection(COL_SUGESTOES).doc(String(id)).delete()
+            .catch(err => console.error('Erro ao excluir sugestão na nuvem', err));
+    }
+
+    function fbApagarColecao(nomeColecao) {
+        if (!fbAtivo || !fbDb) return Promise.resolve();
+        return fbDb.collection(nomeColecao).get().then(snap => {
+            const batch = fbDb.batch();
+            snap.forEach(doc => batch.delete(doc.ref));
+            return batch.commit();
+        });
+    }
+
+    function fbApagarTudoNuvem() {
+        if (!fbAtivo || !fbDb) return;
+        Promise.all([
+            fbApagarColecao(COL_REGISTROS),
+            fbApagarColecao(COL_SUGESTOES)
+        ]).catch(err => console.error('Erro ao apagar tudo na nuvem', err));
+    }
 
     // Reduz o tamanho das fotos (ajuda a caber na nuvem e ocupa menos espaço local).
     function comprimirImagem(dataUrl, maxLado = 1000, qualidade = 0.6) {
