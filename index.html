@@ -243,6 +243,7 @@
                 <!-- Aba Administrador -->
                 <div class="tab-pane fade" id="tabAdmin">
                     <form id="formAdmin" onsubmit="return false;">
+                        <input type="text" name="username" value="admin" autocomplete="username" class="d-none" aria-hidden="true" tabindex="-1">
                         <div class="mb-2">
                             <label class="form-label">Senha do Administrador</label>
                             <input type="password" id="loginSenhaAdmin" class="form-control" autocomplete="current-password" placeholder="Digite a senha do administrador">
@@ -1945,34 +1946,29 @@
 
     function iniciarSincronizacaoFirebase() {
         if (!fbDb) return;
-        // Segurança: só sincroniza se houver um usuário realmente autenticado.
-        if (!fbAuth || !fbAuth.currentUser) {
-            atualizarStatusNuvem('offline', 'Nuvem: faça login');
-            return;
-        }
         fbAtivo = true;
         atualizarStatusNuvem('sync', 'Nuvem: conectando...');
         try {
             const refLegado = fbDb.collection(FB_COLECAO_LEGADO).doc(FB_DOC_LEGADO);
 
-            // Lê em paralelo: formato antigo (documento único) + formato novo (1 doc por correia)
-            Promise.all([
+            // allSettled: se uma leitura falhar (ex.: bloqueio do navegador), as outras seguem.
+            Promise.allSettled([
                 refLegado.get(),
                 fbDb.collection(COL_REGISTROS).get(),
                 fbDb.collection(COL_SUGESTOES).get()
-            ]).then(([snapLegado, snapRegs, snapSugs]) => {
+            ]).then(([rLeg, rRegs, rSugs]) => {
                 let regsLegado = [], sugsLegado = [];
                 let temLegado = false;
-                if (snapLegado.exists) {
-                    const d = snapLegado.data() || {};
+                if (rLeg.status === 'fulfilled' && rLeg.value.exists) {
+                    const d = rLeg.value.data() || {};
                     regsLegado = Array.isArray(d.registros) ? d.registros : [];
                     sugsLegado = Array.isArray(d.sugestoes) ? d.sugestoes : [];
                     temLegado = (regsLegado.length > 0 || sugsLegado.length > 0);
                 }
                 const regsNovos = [];
-                snapRegs.forEach(doc => regsNovos.push(doc.data()));
+                if (rRegs.status === 'fulfilled') rRegs.value.forEach(doc => regsNovos.push(doc.data()));
                 const sugsNovos = [];
-                snapSugs.forEach(doc => sugsNovos.push(doc.data()));
+                if (rSugs.status === 'fulfilled') rSugs.value.forEach(doc => sugsNovos.push(doc.data()));
 
                 // Mescla tudo sem perder nada (local + antigo + novo)
                 registros = mesclarPorId(registros, regsLegado, regsNovos);
@@ -1983,13 +1979,10 @@
                 aplicandoRemoto = false;
                 refreshTudoUI();
 
-                // Grava tudo no formato novo (cria as coleções) e migra o antigo
+                // Grava no formato novo (não derruba a tela se a escrita falhar)
                 return enviarTudoParaFirebase().then(() => {
-                    if (temLegado) {
-                        // Migração concluída: remove o documento antigo para não duplicar
-                        return refLegado.delete().catch(() => {});
-                    }
-                });
+                    if (temLegado) return refLegado.delete().catch(() => {});
+                }).catch(err => console.error('Falha ao gravar na nuvem', err));
             }).then(() => {
                 escutarFirebase();
             }).catch(err => {
