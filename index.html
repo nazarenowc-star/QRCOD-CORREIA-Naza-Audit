@@ -33,6 +33,7 @@
     <!-- Firebase (sincronização na nuvem entre aparelhos) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
     <style>
         body {
@@ -185,9 +186,46 @@
             <span class="badge bg-secondary small-text" id="statusNuvem" title="Status da sincronização na nuvem">
                 <i class="fa-solid fa-cloud"></i> Nuvem: verificando...
             </span>
+            <span class="badge bg-light text-dark small-text" id="usuarioInfo" style="display:none;">
+                <i class="fa-solid fa-user"></i> <span id="usuarioEmail"></span>
+            </span>
+            <button class="btn btn-sm btn-outline-light" id="btnSair" style="display:none;">
+                <i class="fa-solid fa-right-from-bracket"></i> Sair
+            </button>
         </div>
     </div>
 </nav>
+
+<!-- TELA DE LOGIN (aparece só quando o Firebase está configurado e ninguém está logado) -->
+<div id="loginOverlay" style="position:fixed; inset:0; background:#f4f6f8; z-index:20000; display:none; align-items:center; justify-content:center; padding:16px;">
+    <div class="card shadow" style="max-width:380px; width:100%;">
+        <div class="card-header bg-primary text-white">
+            <i class="fa-solid fa-lock"></i> Acesso ao Sistema de Correias
+        </div>
+        <div class="card-body">
+            <div class="mb-2">
+                <label class="form-label">E-mail</label>
+                <input type="email" id="loginEmail" class="form-control" autocomplete="username" placeholder="seu@email.com">
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Senha</label>
+                <input type="password" id="loginSenha" class="form-control" autocomplete="current-password" placeholder="Sua senha">
+            </div>
+            <div id="loginErro" class="alert alert-danger py-1 px-2 small-text" style="display:none;"></div>
+            <div class="d-grid gap-2 mt-2">
+                <button class="btn btn-primary" id="btnEntrar">
+                    <i class="fa-solid fa-right-to-bracket"></i> Entrar
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" id="btnCriarConta">
+                    <i class="fa-solid fa-user-plus"></i> Criar conta
+                </button>
+            </div>
+            <div class="form-text small-text mt-2">
+                Use o e-mail e a senha da sua equipe. Para o primeiro acesso, crie a conta uma vez.
+            </div>
+        </div>
+    </div>
+</div>
 
 <div id="indicadorSalvando" class="alert alert-info py-1 px-2 small-text">
     <i class="fa-solid fa-floppy-disk"></i> Salvando...
@@ -1592,11 +1630,13 @@
     };
 
     let fbDb = null;            // referência do Firestore
+    let fbAuth = null;          // referência da Autenticação
     let fbAtivo = false;        // true quando a nuvem está conectada
     let aplicandoRemoto = false; // evita loop ao aplicar dados vindos da nuvem
     let syncTimer = null;       // debounce do envio para a nuvem
     let snapRegistrosPronto = false;
     let snapSugestoesPronto = false;
+    let sincronizacaoIniciada = false; // garante que a sincronização inicie só uma vez
     // Modelo escalável: UM documento por correia (cabe até ~1MB por correia, total até 1GB).
     const COL_REGISTROS = 'correias';
     const COL_SUGESTOES = 'sugestoes';
@@ -1666,9 +1706,113 @@
         try {
             firebase.initializeApp(firebaseConfig);
             fbDb = firebase.firestore();
-            fbAtivo = true;
-            atualizarStatusNuvem('sync', 'Nuvem: conectando...');
+            fbAuth = firebase.auth();
+            atualizarStatusNuvem('sync', 'Nuvem: aguardando login...');
 
+            // Controla o acesso: só sincroniza depois que o usuário fizer login.
+            fbAuth.onAuthStateChanged(user => {
+                if (user) {
+                    esconderLogin();
+                    atualizarUsuarioUI(user);
+                    if (!sincronizacaoIniciada) {
+                        sincronizacaoIniciada = true;
+                        iniciarSincronizacaoFirebase();
+                    }
+                } else {
+                    atualizarUsuarioUI(null);
+                    mostrarLogin();
+                    atualizarStatusNuvem('offline', 'Nuvem: faça login');
+                }
+            });
+        } catch (e) {
+            console.error('Falha ao inicializar Firebase', e);
+            atualizarStatusNuvem('erro', 'Nuvem: erro na configuração');
+        }
+    }
+
+    // ===== TELA DE LOGIN =====
+    function mostrarLogin() {
+        const ov = document.getElementById('loginOverlay');
+        if (ov) ov.style.display = 'flex';
+    }
+    function esconderLogin() {
+        const ov = document.getElementById('loginOverlay');
+        if (ov) ov.style.display = 'none';
+    }
+    function mostrarErroLogin(msg) {
+        const el = document.getElementById('loginErro');
+        if (!el) return;
+        el.textContent = msg;
+        el.style.display = 'block';
+    }
+    function atualizarUsuarioUI(user) {
+        const info = document.getElementById('usuarioInfo');
+        const emailSpan = document.getElementById('usuarioEmail');
+        const btnSair = document.getElementById('btnSair');
+        if (user) {
+            if (emailSpan) emailSpan.textContent = user.email || 'conectado';
+            if (info) info.style.display = '';
+            if (btnSair) btnSair.style.display = '';
+        } else {
+            if (info) info.style.display = 'none';
+            if (btnSair) btnSair.style.display = 'none';
+        }
+    }
+    function traduzirErroAuth(err) {
+        const code = err && err.code ? err.code : '';
+        const mapa = {
+            'auth/invalid-email': 'E-mail inválido.',
+            'auth/missing-password': 'Informe a senha.',
+            'auth/wrong-password': 'Senha incorreta.',
+            'auth/user-not-found': 'Usuário não encontrado. Crie uma conta primeiro.',
+            'auth/invalid-credential': 'E-mail ou senha incorretos.',
+            'auth/email-already-in-use': 'Este e-mail já tem conta. Faça login.',
+            'auth/weak-password': 'A senha precisa ter pelo menos 6 caracteres.',
+            'auth/too-many-requests': 'Muitas tentativas. Aguarde um momento e tente de novo.',
+            'auth/network-request-failed': 'Sem conexão com a internet.',
+            'auth/operation-not-allowed': 'Ative o login por E-mail/Senha no painel do Firebase.'
+        };
+        return mapa[code] || ('Erro ao entrar: ' + (err && err.message ? err.message : code));
+    }
+    function fazerLogin() {
+        if (!fbAuth) return;
+        const email = (document.getElementById('loginEmail').value || '').trim();
+        const senha = document.getElementById('loginSenha').value || '';
+        const erroEl = document.getElementById('loginErro');
+        if (erroEl) erroEl.style.display = 'none';
+        if (!email || !senha) { mostrarErroLogin('Informe e-mail e senha.'); return; }
+        const btn = document.getElementById('btnEntrar');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Entrando...'; }
+        fbAuth.signInWithEmailAndPassword(email, senha)
+            .catch(err => mostrarErroLogin(traduzirErroAuth(err)))
+            .finally(() => {
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Entrar'; }
+            });
+    }
+    function criarConta() {
+        if (!fbAuth) return;
+        const email = (document.getElementById('loginEmail').value || '').trim();
+        const senha = document.getElementById('loginSenha').value || '';
+        const erroEl = document.getElementById('loginErro');
+        if (erroEl) erroEl.style.display = 'none';
+        if (!email || !senha) { mostrarErroLogin('Informe e-mail e uma senha (mín. 6 caracteres).'); return; }
+        const btn = document.getElementById('btnCriarConta');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Criando...'; }
+        fbAuth.createUserWithEmailAndPassword(email, senha)
+            .catch(err => mostrarErroLogin(traduzirErroAuth(err)))
+            .finally(() => {
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Criar conta'; }
+            });
+    }
+    function fazerLogout() {
+        if (fbAuth) fbAuth.signOut();
+    }
+
+    function iniciarSincronizacaoFirebase() {
+        if (!fbDb) return;
+        fbAtivo = true;
+        atualizarStatusNuvem('sync', 'Nuvem: conectando...');
+        try {
             const refLegado = fbDb.collection(FB_COLECAO_LEGADO).doc(FB_DOC_LEGADO);
 
             // Lê em paralelo: formato antigo (documento único) + formato novo (1 doc por correia)
@@ -4734,6 +4878,20 @@
         const fotosArquivoInput = document.getElementById('fotosArquivoInput');
         if (fotosArquivoInput) {
             fotosArquivoInput.addEventListener('change', handleFotosInput);
+        }
+
+        // Login / Logout
+        const btnEntrar = document.getElementById('btnEntrar');
+        const btnCriarConta = document.getElementById('btnCriarConta');
+        const btnSair = document.getElementById('btnSair');
+        const loginSenha = document.getElementById('loginSenha');
+        if (btnEntrar) btnEntrar.addEventListener('click', fazerLogin);
+        if (btnCriarConta) btnCriarConta.addEventListener('click', criarConta);
+        if (btnSair) btnSair.addEventListener('click', fazerLogout);
+        if (loginSenha) {
+            loginSenha.addEventListener('keydown', e => {
+                if (e.key === 'Enter') fazerLogin();
+            });
         }
 
         // Filtros / Banco
