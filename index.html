@@ -63,6 +63,15 @@
             border-radius: 5px;
             border: 1px solid #ccc;
         }
+        .foto-preview-wrap .foto-remover-btn {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            padding: 2px 6px;
+            font-size: 10px;
+            line-height: 1.2;
+            opacity: 0.95;
+        }
         #indicadorSalvando {
             position: fixed;
             bottom: 10px;
@@ -967,6 +976,9 @@
                                         <div class="form-text small-text">
                                             Máximo recomendado: 4 fotos por correia. "Tirar foto" abre a câmera; "Buscar nos arquivos" abre a galeria/computador.
                                         </div>
+                                        <div id="hintFotosAdmin" class="form-text small-text text-danger" style="display:none;">
+                                            <i class="fa-solid fa-user-shield"></i> Administrador: clique no ícone de lixeira em cada foto para remover. Depois use <strong>Salvar / Atualizar</strong> para gravar na nuvem.
+                                        </div>
                                         <div id="previewFotos" class="d-flex flex-wrap gap-2 mt-2"></div>
                                     </div>
                                 </div>
@@ -1718,6 +1730,8 @@
     let snapRegistrosPronto = false;
     let snapSugestoesPronto = false;
     let sincronizacaoIniciada = false; // garante que a sincronização inicie só uma vez
+    const CORREIA_PENDENTE_KEY = 'correia_qrcode_pendente';
+    let correiaPendenteAberta = false;
     // Modelo escalável: UM documento por correia (cabe até ~1MB por correia, total até 1GB).
     const COL_REGISTROS = 'correias';
     const COL_SUGESTOES = 'sugestoes';
@@ -1773,6 +1787,34 @@
         atualizarSelectsRelatorioEQR();
         if (typeof atualizarDashboardCorreiaSelect === 'function') atualizarDashboardCorreiaSelect();
         if (typeof preencherTabelaSugestoes === 'function') preencherTabelaSugestoes();
+        tentarAbrirCorreiaPendente();
+    }
+
+    function registrarCorreiaPendente(id) {
+        if (!id) return;
+        try { sessionStorage.setItem(CORREIA_PENDENTE_KEY, String(id)); } catch (_) { /* ignora */ }
+    }
+
+    function obterIdCorreiaPendente() {
+        try {
+            const params = new URLSearchParams(location.search);
+            return params.get('correia') || params.get('ver') || sessionStorage.getItem(CORREIA_PENDENTE_KEY) || '';
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function tentarAbrirCorreiaPendente() {
+        const id = obterIdCorreiaPendente();
+        if (!id) return;
+        registrarCorreiaPendente(id);
+        const reg = registros.find(r => String(r.id) === String(id));
+        if (!reg) return;
+        const atual = document.getElementById('registroId');
+        if (correiaPendenteAberta && atual && atual.value === String(id)) return;
+        correiaPendenteAberta = true;
+        carregarRegistroNoFormulario(id);
+        if (typeof gerarQRCodeParaRegistro === 'function') gerarQRCodeParaRegistro(id);
     }
 
     function initFirebase() {
@@ -1800,12 +1842,14 @@
                     esconderLogin();
                     atualizarUsuarioUI(user);
                     aplicarPermissoesUI();
+                    tentarAbrirCorreiaPendente();
                     if (!sincronizacaoIniciada) {
                         sincronizacaoIniciada = true;
                         iniciarSincronizacaoFirebase();
                     } else {
                         // troca de usuário sem recarregar: atualiza a tabela conforme novo perfil
                         preencherTabelaRegistros();
+                        tentarAbrirCorreiaPendente();
                     }
                 } else {
                     usuarioEhAdmin = false;
@@ -1873,6 +1917,9 @@
         if (btnImportarBackup) btnImportarBackup.style.display = somenteAdmin ? 'none' : '';
         // re-renderiza a tabela para ajustar os botões de editar/excluir por registro
         if (typeof preencherTabelaRegistros === 'function') preencherTabelaRegistros();
+        const hintFotosAdmin = document.getElementById('hintFotosAdmin');
+        if (hintFotosAdmin) hintFotosAdmin.style.display = usuarioEhAdmin ? '' : 'none';
+        atualizarBotoesExclusaoFotos();
     }
 
     function fazerLoginAdmin() {
@@ -2640,6 +2687,7 @@
         document.getElementById('inspecaoForm').reset();
         document.getElementById('registroId').value = '';
         document.getElementById('previewFotos').innerHTML = '';
+        correiaPendenteAberta = false;
         
         // Limpar todas as caixas de problemas
         document.querySelectorAll('.problema-container').forEach(container => {
@@ -3056,17 +3104,7 @@
         set('observacoes', reg.observacoes);
 
         // Restaurar fotos
-        const preview = document.getElementById('previewFotos');
-        if (preview) {
-            preview.innerHTML = '';
-            (reg.fotosBase64 || []).forEach(b64 => {
-                const img = document.createElement('img');
-                img.src = b64;
-                img.className = 'foto-preview';
-                img.dataset.base64 = b64;
-                preview.appendChild(img);
-            });
-        }
+        renderizarPreviewFotos(reg.fotosBase64 || []);
 
         // Mudar para a aba de cadastro
         const tab = new bootstrap.Tab(document.querySelector('button[data-bs-target="#cadastro"]'));
@@ -4915,19 +4953,13 @@
         return '';
     }
 
-    // Ao abrir o sistema por um link de QR Code (?correia=id), carrega a correia automaticamente.
+    // Ao abrir o sistema por link de QR Code (?correia=id ou ?ver=id), abre a correia após login/dados.
     function carregarCorreiaPelaURL() {
         try {
-            const params = new URLSearchParams(location.search);
-            const id = params.get('correia');
+            const id = obterIdCorreiaPendente();
             if (!id) return;
-            const reg = registros.find(r => r.id === id);
-            if (reg) {
-                carregarRegistroNoFormulario(id);
-                gerarQRCodeParaRegistro(id);
-            } else {
-                alert('QR Code lido, mas esta correia não está no banco deste aparelho. Importe o backup correspondente.');
-            }
+            registrarCorreiaPendente(id);
+            tentarAbrirCorreiaPendente();
         } catch (_) { /* ignora */ }
     }
 
@@ -4947,6 +4979,7 @@
     }
 
     function iniciarModoVisualizacao(id) {
+        registrarCorreiaPendente(id);
         const overlay = document.getElementById('viewerOverlay');
         if (overlay) overlay.style.display = 'block';
         // Garante que a tela de login não apareça neste modo
@@ -5008,6 +5041,7 @@
             '<div class="mb-2"><strong>' + rotulo + ':</strong> ' + (valor ? escaparHTML(valor) : '<span class="text-muted">-</span>') + '</div>';
 
         const baseUrl = location.href.split('#')[0].split('?')[0];
+        const linkSistema = baseUrl + '?correia=' + encodeURIComponent(String(reg.id));
 
         cont.innerHTML =
             '<div class="card shadow-sm mb-3">' +
@@ -5029,9 +5063,14 @@
             '<div class="card shadow-sm mb-3"><div class="card-header bg-light">Soluções Recomendadas</div><div class="card-body">' + (reg.solucoes ? escaparHTML(reg.solucoes) : '<span class="text-muted">-</span>') + '</div></div>' +
             '<div class="card shadow-sm mb-3"><div class="card-header bg-light">Observações</div><div class="card-body">' + (reg.observacoes ? escaparHTML(reg.observacoes) : '<span class="text-muted">-</span>') + '</div></div>' +
             '<div class="card shadow-sm mb-3"><div class="card-header bg-light">Fotos</div><div class="card-body">' + fotosHTML + '</div></div>' +
-            '<div class="text-center text-muted small-text mb-4">' +
-                'Visualização somente leitura. ' +
-                '<a href="' + baseUrl + '">Abrir o sistema completo (login)</a>' +
+            '<div class="card shadow-sm mb-3 border-primary">' +
+                '<div class="card-body text-center">' +
+                    '<p class="small-text text-muted mb-2">Faça login no sistema completo para editar esta correia. Ela será aberta automaticamente após entrar.</p>' +
+                    '<a href="' + linkSistema + '" class="btn btn-primary w-100 mb-2">' +
+                        '<i class="fa-solid fa-right-to-bracket"></i> Abrir no sistema (técnico ou administrador)' +
+                    '</a>' +
+                    '<div class="small-text text-muted">Correia: <strong>' + escaparHTML(reg.codigo || reg.id) + '</strong></div>' +
+                '</div>' +
             '</div>';
     }
 
@@ -5071,12 +5110,14 @@
 
                 const id = extrairIdCorreia(decodedText);
                 if (id) {
-                    const reg = registros.find(r => r.id === id);
+                    registrarCorreiaPendente(id);
+                    const reg = registros.find(r => String(r.id) === String(id));
                     if (reg) {
+                        correiaPendenteAberta = true;
                         carregarRegistroNoFormulario(id);
                         alert(`Correia ${reg.codigo || ''} carregada a partir do QR Code.`);
                     } else {
-                        alert('ID de correia não encontrado no banco local. Importar backup se for outro aparelho.');
+                        alert('ID de correia não encontrado no banco local. Aguarde a sincronização ou importe o backup se for outro aparelho.');
                     }
                 }
             },
@@ -5102,6 +5143,45 @@
     }
 
     // ===== FOTOS (BASE64) =====
+    function criarElementoPreviewFoto(b64) {
+        const wrap = document.createElement('div');
+        wrap.className = 'foto-preview-wrap position-relative d-inline-block';
+        const img = document.createElement('img');
+        img.src = b64;
+        img.className = 'foto-preview';
+        img.dataset.base64 = b64;
+        wrap.appendChild(img);
+        if (usuarioEhAdmin) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-danger btn-sm foto-remover-btn';
+            btn.title = 'Remover foto (administrador)';
+            btn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+            btn.addEventListener('click', () => {
+                if (confirm('Remover esta foto?\n\nClique em Salvar / Atualizar para gravar na nuvem e liberar espaço.')) {
+                    wrap.remove();
+                }
+            });
+            wrap.appendChild(btn);
+        }
+        return wrap;
+    }
+
+    function renderizarPreviewFotos(listaBase64) {
+        const preview = document.getElementById('previewFotos');
+        if (!preview) return;
+        preview.innerHTML = '';
+        (listaBase64 || []).forEach(b64 => preview.appendChild(criarElementoPreviewFoto(b64)));
+    }
+
+    function atualizarBotoesExclusaoFotos() {
+        const preview = document.getElementById('previewFotos');
+        if (!preview) return;
+        const fotos = [];
+        preview.querySelectorAll('img[data-base64]').forEach(img => fotos.push(img.dataset.base64));
+        if (fotos.length) renderizarPreviewFotos(fotos);
+    }
+
     function handleFotosInput(event) {
         const files = Array.from(event.target.files || []);
         const preview = document.getElementById('previewFotos');
@@ -5121,11 +5201,7 @@
             const reader = new FileReader();
             reader.onload = e => {
                 comprimirImagem(e.target.result).then(base64 => {
-                    const img = document.createElement('img');
-                    img.className = 'foto-preview';
-                    img.src = base64;
-                    img.dataset.base64 = base64;
-                    preview.appendChild(img);
+                    preview.appendChild(criarElementoPreviewFoto(base64));
                 });
             };
             reader.readAsDataURL(file);
